@@ -5,7 +5,7 @@ Pulls three slices of Eco server data and collapses them into a single card:
 1. Biome composition from the public worldlayers endpoint — parsed out of the
    per-layer ``Summary`` strings, which look like ``"4%"``. Percentages do NOT
    sum to 100; large chunks of the world (shallow water, mountain, transitional
-   terrain) are uncounted — see ``todo/10-ecoregion-biodiversity.md``.
+   terrain) are uncounted — see #19.
 2. Nearest real-world ecoregion match via cosine similarity against a small,
    committed WWF-inspired fixture. The Eco biome vector is normalized to
    ``sum=1`` first so the classifier is comparing *shapes*, not absolute area.

@@ -743,7 +743,7 @@ def build_milestones_payload(info: dict[str, Any]) -> dict[str, Any]:
     """Shape the payload consumed by the milestone card template.
 
     Sorted by completion % descending (closest to target at top), matching the
-    acceptance criterion in todo/04-milestone-tracker.md.
+    acceptance criterion in #13.
     """
     raw_dict = info.get("ServerAchievementsDict") or {}
     rows = [parse_achievement(name, value) for name, value in raw_dict.items()]
@@ -1224,8 +1224,8 @@ _ADMIN_DEFAULT_BASE = os.environ.get(
     DEFAULT_ECO_INFO_URL.rsplit("/info", 1)[0],
 )
 
-# SSM secret paths — documented in todo/README.md. Region is pinned us-east-1:
-# the AWS CLI default is us-west-2 and would silently miss these params.
+# SSM secret paths. Region is pinned us-east-1: the AWS CLI default is
+# us-west-2 and would silently miss these params.
 _SSM_REGION = os.environ.get("AWS_REGION", "us-east-1")
 _ECO_ADMIN_SSM_PATH = os.environ.get("ECO_ADMIN_TOKEN_SSM", "/eco-mcp-app/api-admin-token")
 

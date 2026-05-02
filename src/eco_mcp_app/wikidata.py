@@ -339,7 +339,7 @@ def _build_card_from_wikipedia(name: str, data: dict[str, Any]) -> EcopediaCard:
 async def build_ecopedia_card(name: str, category: str | None = None) -> EcopediaCard:
     """Main entry point. Returns an EcopediaCard, with `not_found=True` on total miss.
 
-    Shape of the flow matches todo/06-wikidata-ecopedia.md:
+    Shape of the flow matches the spec in #15:
       - category given -> SPARQL first, Wikipedia as fallback for description
       - no category -> Wikipedia first (cheap), SPARQL only if disambiguation
     """
