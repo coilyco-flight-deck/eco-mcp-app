@@ -56,8 +56,6 @@ idna==3.11
     # via
     #   anyio
     #   httpx
-invoke==3.0.3
-    # via eco-mcp-app
 jinja2==3.1.6
     # via eco-mcp-app
 jsonschema==4.26.0

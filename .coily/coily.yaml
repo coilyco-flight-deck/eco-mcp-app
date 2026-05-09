@@ -1,8 +1,7 @@
 # Per-repo command allowlist for eco-mcp-app. Coily is the canonical entry
-# point for dev verbs here; each command below delegates to a pyinvoke task
-# in tasks.py, or a Make target. Operators (human or agent) type
-# `coily <verb>`, not `inv <task>` - the lockdown denies bare uv/python
-# invocations.
+# point for dev verbs here; each command below delegates to a Make target.
+# Operators (human or agent) type `coily <verb>`, not `make <target>` -
+# the lockdown denies bare uv/python invocations.
 #
 # Names follow coily's [a-z0-9-] rule. Argv validation rejects shell
 # metacharacters at invocation time, so flags forward verbatim through
@@ -10,31 +9,31 @@
 
 commands:
   sync:
-    run: uv run inv sync
+    run: make sync
     description: Install deps via uv.
   smoke:
-    run: uv run inv smoke
+    run: make smoke
     description: End-to-end smoke test the MCP server via stdio.
   install-desktop:
-    run: uv run inv install-desktop
+    run: make install-desktop
     description: Wire eco-mcp-app into Claude Desktop's claude_desktop_config.json.
   harness:
-    run: uv run inv harness
-    description: Serve static/harness.html, the local Claude-Desktop-mimicking iframe host. Pass --port=N.
+    run: make harness
+    description: Serve static/harness.html, the local Claude-Desktop-mimicking iframe host. Args - harness_port=<int>.
   http:
-    run: uv run inv http
-    description: Run the MCP server over HTTP on port 4000. Pass --port=N to override.
+    run: make http
+    description: Run the MCP server over HTTP. Args - http_port=<int>.
   test:
-    run: uv run inv test
+    run: make test
     description: Run the pytest suite.
   ruff:
-    run: uv run inv ruff
+    run: make ruff
     description: Lint + format check (no mutations).
   fmt:
-    run: uv run inv fmt
+    run: make fmt
     description: Apply ruff fixes and formatting in place.
   precommit:
-    run: uv run inv precommit
+    run: make precommit
     description: Run all pre-commit hooks against every file.
   build-native:
     run: make build-native
@@ -45,3 +44,12 @@ commands:
   publish:
     run: make publish
     description: Tag and push the docker image to ghcr.io.
+  run-native:
+    run: make run-native
+    description: Run the FastAPI server with autoreload on the configured port.
+  run-docker:
+    run: make run-docker
+    description: Run the published container locally on the configured port.
+  deploy:
+    run: make deploy
+    description: Build, publish, and roll out the application to the k3s cluster.

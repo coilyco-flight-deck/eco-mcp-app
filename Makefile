@@ -93,3 +93,51 @@ run-native:
 #  see also: run-native
 run-docker:
 	docker run --expose $(port) -p $(port):$(port) -it --rm $(name):latest
+
+## install deps via uv
+sync:
+	uv sync
+
+## end-to-end smoke test the MCP server via stdio
+smoke:
+	(printf '%s\n' \
+	  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"extensions":{"io.modelcontextprotocol/ui":{"mimeTypes":["text/html;profile=mcp-app"]}}},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}' \
+	  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+	  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+	  '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://eco/status.html"}}' \
+	  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_eco_server_status","arguments":{}}}' \
+	  '{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"ui://eco/economy.html"}}' \
+	  '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_eco_economy","arguments":{}}}'; sleep 8) | uv run python -m eco_mcp_app
+
+## wire eco-mcp-app into Claude Desktop's claude_desktop_config.json
+install-desktop:
+	python scripts/install-desktop-config.py
+
+## serve static/harness.html, the local Claude-Desktop-mimicking iframe host
+#  vars: harness_port (default 8765)
+harness:
+	@echo "Harness: http://localhost:$(or $(harness_port),8765)/static/harness.html"
+	python3 -m http.server $(or $(harness_port),8765)
+
+## run pytest
+test:
+	uv run pytest
+
+## lint + format check (no mutations)
+ruff:
+	uv run ruff check src
+	uv run ruff format --check src
+
+## apply ruff fixes and formatting in place
+fmt:
+	uv run ruff check --fix src
+	uv run ruff format src
+
+## run all pre-commit hooks against every file
+precommit:
+	uv run pre-commit run --all-files
+
+## run the MCP server over HTTP on $(port)
+#  vars: http_port (default $(port))
+http:
+	uv run uvicorn eco_mcp_app.http_app:app --reload --host 0.0.0.0 --port $(or $(http_port),$(port))

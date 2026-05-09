@@ -9,7 +9,6 @@ authors = [{ name = "Kai Siren" }]
 dependencies = [
   "mcp>=1.14.0",
   "httpx>=0.28.0",
-  "invoke>=3.0.3",
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
   "jinja2>=3.1.0",
@@ -46,9 +45,6 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "A", "RUF"]
-
-[tool.ruff.lint.per-file-ignores]
-"tasks.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"
