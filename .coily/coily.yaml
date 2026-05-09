@@ -1,0 +1,47 @@
+# Per-repo command allowlist for eco-mcp-app. Coily is the canonical entry
+# point for dev verbs here; each command below delegates to a pyinvoke task
+# in tasks.py, or a Make target. Operators (human or agent) type
+# `coily <verb>`, not `inv <task>` - the lockdown denies bare uv/python
+# invocations.
+#
+# Names follow coily's [a-z0-9-] rule. Argv validation rejects shell
+# metacharacters at invocation time, so flags forward verbatim through
+# coily's user-extras mechanism.
+
+commands:
+  sync:
+    run: uv run inv sync
+    description: Install deps via uv.
+  smoke:
+    run: uv run inv smoke
+    description: End-to-end smoke test the MCP server via stdio.
+  install-desktop:
+    run: uv run inv install-desktop
+    description: Wire eco-mcp-app into Claude Desktop's claude_desktop_config.json.
+  harness:
+    run: uv run inv harness
+    description: Serve static/harness.html, the local Claude-Desktop-mimicking iframe host. Pass --port=N.
+  http:
+    run: uv run inv http
+    description: Run the MCP server over HTTP on port 4000. Pass --port=N to override.
+  test:
+    run: uv run inv test
+    description: Run the pytest suite.
+  ruff:
+    run: uv run inv ruff
+    description: Lint + format check (no mutations).
+  fmt:
+    run: uv run inv fmt
+    description: Apply ruff fixes and formatting in place.
+  precommit:
+    run: uv run inv precommit
+    description: Run all pre-commit hooks against every file.
+  build-native:
+    run: make build-native
+    description: uv lock + uv sync. Rebuilds requirements.txt from pyproject.toml.
+  build-docker:
+    run: make build-docker
+    description: Build the docker image locally with BuildKit cache.
+  publish:
+    run: make publish
+    description: Tag and push the docker image to ghcr.io.
