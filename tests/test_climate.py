@@ -32,6 +32,7 @@ from eco_mcp_app.climate import (
     SEA_LEVEL_DATASET_CANDIDATES,
     ClimateSnapshot,
     _earth_year_for_ppm,
+    _parse_dataset_point,
     _parse_layer_pct,
     _percent_change,
     compute_climate_payload,
@@ -103,8 +104,31 @@ def _route_actions_empty() -> None:
 
 
 def _route_flatlist(names: list[str]) -> None:
+    """Stub flatlist with a plain list-of-strings (old Eco shape)."""
     respx.get(f"{_DEFAULT_BASE}/datasets/flatlist").mock(
         return_value=httpx.Response(200, json=names)
+    )
+
+
+def _route_flatlist_dicts(names: list[str]) -> None:
+    """Stub flatlist with the dict-shape Eco 0.13.0.3 actually returns.
+
+    Each entry is a minimal subset of the live-catalog response so the
+    parser exercise is identical to production.
+    """
+    catalog = [
+        {
+            "Name": name,
+            "DisplayName": name,
+            "Unit": "PPM",
+            "StatType": "ContinuousValue",
+            "Tags": ["Climate"],
+            "TimeKey": "_id",
+        }
+        for name in names
+    ]
+    respx.get(f"{_DEFAULT_BASE}/datasets/flatlist").mock(
+        return_value=httpx.Response(200, json=catalog)
     )
 
 
@@ -268,6 +292,47 @@ async def test_fetch_climate_falls_back_to_flatlist_discovery() -> None:
     assert "WorldCO2Level" in snap.available_climate_datasets
     assert "TidalSeaLevelHeight" in snap.available_climate_datasets
     assert "AirPollutionPerRegion" in snap.available_climate_datasets
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_climate_parses_dict_shape_flatlist() -> None:
+    """Eco 0.13.0.3 returns flatlist as a list of dicts with metadata.
+
+    Real-world regression: the catalog leaked through as full ``{'Name': ...}``
+    strings on the empty-state card because we were stringifying each entry
+    instead of extracting ``Name``. Verify the canonical name is what we
+    surface and what we probe.
+    """
+    _route_datasets({"TotalCO2": [400, 415]})
+    _route_flatlist_dicts(
+        [
+            "TotalCO2",
+            "SeaLevel",
+            "TotalGroundPollution",
+            "OfferedLoanOrBond",  # non-climate, must be filtered out
+        ]
+    )
+    _route_worldlayers_empty()
+    _route_actions_empty()
+
+    snap = await fetch_climate(
+        None,
+        info=_info(),
+        days_elapsed=4,
+        admin_token="test-token",
+        default_admin_base=_DEFAULT_BASE,
+    )
+
+    # CO2 candidate hit on the first try (TotalCO2 is at the head now).
+    assert snap.co2_dataset_name == "TotalCO2"
+    # Clean names, not dict reprs.
+    assert "TotalCO2" in snap.available_climate_datasets
+    assert "SeaLevel" in snap.available_climate_datasets
+    assert "TotalGroundPollution" in snap.available_climate_datasets
+    assert not any(
+        "{" in n or "'Name'" in n for n in snap.available_climate_datasets
+    )
 
 
 @pytest.mark.asyncio
@@ -439,6 +504,47 @@ def test_dataset_candidate_constants_are_nonempty() -> None:
     assert CO2_DATASET_CANDIDATES
     assert SEA_LEVEL_DATASET_CANDIDATES
     assert POLLUTION_DATASET_CANDIDATES
+
+
+def test_canonical_eco_0_13_names_in_candidates() -> None:
+    """Live-catalog regression: the canonical Eco 0.13.0.3 names must be in
+    the candidate lists so the first probe hits without needing flatlist."""
+    assert "TotalCO2" in CO2_DATASET_CANDIDATES
+    assert "SeaLevel" in SEA_LEVEL_DATASET_CANDIDATES
+    assert "TotalGroundPollution" in POLLUTION_DATASET_CANDIDATES
+    assert "PolluteAir" in POLLUTION_ACTION_TYPES
+
+
+def test_parse_dataset_point_legacy_time_value_shape() -> None:
+    assert _parse_dataset_point({"Time": 100, "Value": 1.5}) == (100.0, 1.5)
+    assert _parse_dataset_point({"time": 100, "value": 1.5}) == (100.0, 1.5)
+
+
+def test_parse_dataset_point_continuousvalue_id_shape() -> None:
+    """Eco 0.13.0.3 ContinuousValue stats key the time on ``_id``."""
+    assert _parse_dataset_point({"_id": 250, "Value": 414.2}) == (250.0, 414.2)
+
+
+def test_parse_dataset_point_shortname_value_shape() -> None:
+    """Some ContinuousValue stats put the value under the stat's ShortName
+    (e.g. ``"tl"`` for ``TotalCO2``). We accept "the lone numeric field that
+    isn't the time key" so the value still flows through."""
+    pt = {"_id": 300, "tl": 416.5}
+    assert _parse_dataset_point(pt) == (300.0, 416.5)
+
+
+def test_parse_dataset_point_flat_pair_shape() -> None:
+    assert _parse_dataset_point([100, 1.5]) == (100.0, 1.5)
+    assert _parse_dataset_point((100, 1.5)) == (100.0, 1.5)
+
+
+def test_parse_dataset_point_drops_invalid() -> None:
+    assert _parse_dataset_point({"Value": 1.5}) is None  # no time key
+    assert _parse_dataset_point({"Time": 100}) is None  # no value
+    assert _parse_dataset_point("garbage") is None
+    assert _parse_dataset_point(None) is None
+    # Boolean fields must not be picked up as the numeric value.
+    assert _parse_dataset_point({"_id": 1, "IsPaused": True}) is None
 
 
 # ---------------------------------------------------------------------------

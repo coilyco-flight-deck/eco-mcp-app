@@ -43,9 +43,16 @@ from cachetools import TTLCache
 
 # Candidate dataset names. We try each in order and use the first that
 # returns at least one point. An empty result simply means the server
-# doesn't expose that name — not an error. Order is "most-likely first"
-# based on Eco's published stat catalog and common modded names.
+# doesn't expose that name — not an error.
+#
+# Live catalog discovery on Eco 0.13.0.3 (cycle 13) confirmed the
+# canonical names listed first; older Eco builds used different forms
+# (`CO2PPM`, `AverageCO2PPM`) so both are kept for backward compat.
 CO2_DATASET_CANDIDATES: tuple[str, ...] = (
+    "TotalCO2",
+    "LifetimeCO2FromPollution",
+    "LifetimeCO2FromAnimals",
+    "LifetimeCO2FromPlants",
     "CO2PPM",
     "AverageCO2PPM",
     "AtmosphereCO2",
@@ -57,14 +64,18 @@ SEA_LEVEL_DATASET_CANDIDATES: tuple[str, ...] = (
     "OceanLevel",
 )
 POLLUTION_DATASET_CANDIDATES: tuple[str, ...] = (
+    "TotalGroundPollution",
     "GroundPollution",
     "AveragePollution",
     "Pollution",
 )
 
-# Action names for polluter attribution. Same defensive multi-name approach
-# — the exporter returns 404 / empty for unknown names, which we silently skip.
+# Action names for polluter attribution. `PolluteAir` is the canonical
+# event-stat on Eco 0.13.0.3 ("Air pollution was released (triggered every
+# 30 sec of operation)"). Older candidate names are kept for backward
+# compatibility with modded / older servers.
 POLLUTION_ACTION_TYPES: tuple[str, ...] = (
+    "PolluteAir",
     "PollutionAction",
     "EmitPollutionAction",
     "EmitCO2Action",
@@ -201,18 +212,67 @@ async def _fetch_dataset(
     out: list[tuple[float, float]] = []
     if isinstance(data, list):
         for pt in data:
-            if isinstance(pt, dict):
-                t = pt.get("Time", pt.get("time"))
-                v = pt.get("Value", pt.get("value"))
-            elif isinstance(pt, list | tuple) and len(pt) >= 2:
-                t, v = pt[0], pt[1]
-            else:
-                continue
-            try:
-                out.append((float(t), float(v)))
-            except (TypeError, ValueError):
-                continue
+            parsed = _parse_dataset_point(pt)
+            if parsed is not None:
+                out.append(parsed)
     return out
+
+
+# Time-key candidates ordered by how common each form is in the wild:
+# - ``Time`` is the event-stat / older economy-stat convention.
+# - ``_id`` is the ContinuousValue convention on Eco 0.13.0.3 (per the
+#   stat catalog's ``TimeKey`` metadata).
+_DATASET_TIME_KEYS: tuple[str, ...] = ("Time", "time", "_id", "Id", "T")
+
+
+def _parse_dataset_point(pt: Any) -> tuple[float, float] | None:
+    """Coerce one ``/datasets/get`` point to ``(time, value)``.
+
+    Tolerates several shapes seen across Eco versions:
+
+    - ``{"Time": t, "Value": v}`` — legacy economy stats, event stats.
+    - ``{"_id": t, "Value": v}`` — ContinuousValue stats on 0.13.0.3.
+    - ``{"_id": t, "<ShortName>": v}`` — same, but the value lives under
+      the stat's short-name key (e.g. ``"tl"`` for ``TotalCO2``). We
+      identify it as "the only numeric field that isn't the time key".
+    - ``[t, v]`` — flat tuple pair, occasionally returned by mod stats.
+
+    Returns ``None`` if neither time nor value can be recovered — the
+    caller drops the point.
+    """
+    if isinstance(pt, list | tuple) and len(pt) >= 2:
+        try:
+            return float(pt[0]), float(pt[1])
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(pt, dict):
+        return None
+    time_key: str | None = None
+    t_raw: Any = None
+    for k in _DATASET_TIME_KEYS:
+        if k in pt:
+            time_key = k
+            t_raw = pt[k]
+            break
+    if time_key is None:
+        return None
+    v_raw: Any = pt.get("Value", pt.get("value"))
+    if v_raw is None:
+        # Fall back to "the lone numeric field that isn't the time key" —
+        # handles ContinuousValue points where the value lives under the
+        # stat's ShortName (e.g. {"_id": 123, "tl": 414.2}).
+        for k, val in pt.items():
+            if k == time_key:
+                continue
+            if isinstance(val, int | float) and not isinstance(val, bool):
+                v_raw = val
+                break
+    if v_raw is None:
+        return None
+    try:
+        return float(t_raw), float(v_raw)
+    except (TypeError, ValueError):
+        return None
 
 
 async def _fetch_first_nonempty(
@@ -264,6 +324,13 @@ async def _fetch_dataset_flatlist(
     The flatlist is the source of truth — we use it to discover climate
     datasets when our hard-coded candidates don't match.
 
+    Response shape varies by Eco version:
+    - 0.13.0.3 returns ``list[dict]`` where each dict has rich metadata
+      (``Name``, ``DisplayName``, ``Unit``, ``Tags``, ``StatType``, ...).
+      We extract ``Name`` — that's what ``/datasets/get?dataset=...`` uses.
+    - Older / modded builds may return ``list[str]`` directly.
+    Both shapes are normalized to a plain list of canonical names.
+
     Returns ``[]`` on any non-200, missing endpoint, or unexpected shape.
     """
     try:
@@ -273,15 +340,27 @@ async def _fetch_dataset_flatlist(
         data = r.json()
     except (httpx.HTTPError, ValueError):
         return []
-    if isinstance(data, list):
-        return [str(x) for x in data if x]
-    # Some Eco builds wrap the list under a key. Be defensive.
+    # Some Eco builds wrap the list under a key.
     if isinstance(data, dict):
         for key in ("datasets", "Datasets", "values", "Values"):
             v = data.get(key)
             if isinstance(v, list):
-                return [str(x) for x in v if x]
-    return []
+                data = v
+                break
+        else:
+            return []
+    if not isinstance(data, list):
+        return []
+    out: list[str] = []
+    for entry in data:
+        if isinstance(entry, str):
+            if entry:
+                out.append(entry)
+        elif isinstance(entry, dict):
+            name = entry.get("Name") or entry.get("name")
+            if name:
+                out.append(str(name))
+    return out
 
 
 # Substring keywords for the flatlist-based fallback. Lowercase, matched
