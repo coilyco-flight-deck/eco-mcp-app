@@ -1,0 +1,162 @@
+{# Climate / atmosphere card.
+
+   Surfaces global atmospheric state — CO2 ppm, sea level, ground pollution
+   — for any player on the server, including those who don't run polluting
+   machines and would otherwise have no in-game visibility into the trend.
+
+   Layout mirrors the economy card (banner → narrative → KPI grid →
+   sparklines → polluter attribution → footer) so the visual idiom is
+   shared. Every section gracefully degrades to "no data yet" when the
+   relevant series is empty — Eco servers very early in the cycle, or
+   without the admin token, hit this path. #}
+<div class="banner-wrap">
+  <a href="{{ steam_url }}" target="_blank" rel="noopener">
+    <img src="{{ banner_src }}" alt="Eco">
+    <div class="banner-overlay">
+      <div class="banner-title">Climate &amp; pollution</div>
+      <div class="banner-sub">
+        {{ server.description or server.category or "Eco server" }}
+        · cycle day {{ days_elapsed }}
+      </div>
+    </div>
+    <span class="banner-badge climate-badge climate-{{ status }}">
+      <span class="dot"></span>{{ status }}
+    </span>
+  </a>
+</div>
+
+<div class="about narrative narrative-{{ status }}">
+  {{ narrative }}
+  {%- if earth_match %}
+  <div class="earth-anchor" style="margin-top:6px">
+    <strong>Real-world anchor:</strong> {{ earth_match.note }}
+    (Mauna Loa annual mean ~{{ '%.0f' % earth_match.ppm }} ppm).
+  </div>
+  {%- endif %}
+  {%- if not admin_ok %}
+  <div class="hint" style="margin-top:6px">
+    Admin token unavailable — showing public worldlayers data only. Set the
+    <code>ECO_ADMIN_TOKEN</code> env var or SSM
+    <code>/eco-mcp-app/api-admin-token</code> for live CO2 / sea level series
+    and polluter attribution.
+  </div>
+  {%- endif %}
+</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="card-label">CO2 ppm</div>
+    <div class="card-val">
+      {% if co2.current is not none %}
+        {{ '%.0f' % co2.current }}
+      {% else %}—{% endif %}
+    </div>
+    {{ co2.spark_svg }}
+    <div class="card-sub">
+      {% if co2.change_pct is not none %}
+        {{ '%+.2f' % co2.change_pct }}% since cycle start
+      {% else %}no series yet{% endif %}
+      {%- if co2.dataset_name %} · <code>{{ co2.dataset_name }}</code>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Sea level</div>
+    <div class="card-val">
+      {% if sea_level.current is not none %}
+        {{ '%.3f' % sea_level.current }}
+      {% else %}—{% endif %}
+    </div>
+    {{ sea_level.spark_svg }}
+    <div class="card-sub">
+      {% if sea_level.rate_per_day %}
+        rate {{ '%+.4f' % sea_level.rate_per_day }} / day
+      {% elif sea_level.current is not none %}
+        no measurable drift
+      {% else %}no series yet{% endif %}
+      {%- if sea_level.dataset_name %} · <code>{{ sea_level.dataset_name }}</code>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Ground pollution</div>
+    <div class="card-val">
+      {% if pollution.current is not none %}
+        {{ '%.1f' % pollution.current }}%
+      {% else %}—{% endif %}
+    </div>
+    {{ pollution.spark_svg }}
+    <div class="card-sub">
+      source: {{ pollution.source }}
+      {%- if pollution.dataset_name %} · <code>{{ pollution.dataset_name }}</code>{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if attribution.has_data %}
+<div class="grid spark-grid" style="margin-top:14px">
+  <div class="card">
+    <div class="card-label">Top polluting citizens</div>
+    <ul class="climate-rank">
+      {% for entry in attribution.top_citizens %}
+      <li>
+        <span class="climate-rank__name">{{ entry.name }}</span>
+        <span class="climate-rank__count">{{ '%.0f' % entry.count }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% if attribution.top_stations %}
+  <div class="card">
+    <div class="card-label">Top polluting stations</div>
+    <ul class="climate-rank">
+      {% for entry in attribution.top_stations %}
+      <li>
+        <span class="climate-rank__name">{{ entry.name }}</span>
+        <span class="climate-rank__count">{{ '%.0f' % entry.count }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+<div class="hint" style="margin-top:8px">
+  Aggregated from {{ '{:,}'.format(attribution.actions_total) }} pollution event{{ '' if attribution.actions_total == 1 else 's' }}
+  across {{ attribution.action_types_seen|length }} action type{{ '' if attribution.action_types_seen|length == 1 else 's' }}.
+</div>
+{% elif admin_ok %}
+<div class="empty" style="margin-top:14px">
+  <strong style="color:var(--leaf-bright)">No polluter attribution yet</strong>
+  <div class="hint">
+    The action exporter hasn't recorded any pollution events for the action
+    names this tool probes ({{ ", ".join(["PollutionAction", "EmitPollutionAction", "EmitCO2Action", "BurnFuelAction"]) }}).
+    This is normal for low-industry servers or very early in the cycle.
+  </div>
+</div>
+{% endif %}
+
+{% if warnings %}
+<div class="hint" style="margin-top:8px">
+  Non-fatal fetch warnings:
+  {% for w in warnings %}<code>{{ w }}</code>{{ "; " if not loop.last else "" }}{% endfor %}
+</div>
+{% endif %}
+
+<div class="footer">
+  <div class="footer-meta">
+    <span>
+      Fetched {{ fetched_at }}
+      {%- if server.sourceUrl %} · <code>{{ server.sourceUrl }}</code>{% endif %}
+    </span>
+    <div class="footer-actions">
+      <a class="cta steam" href="{{ steam_url }}" target="_blank" rel="noopener">Eco on Steam ↗</a>
+    </div>
+  </div>
+  <div class="credits-line">
+    <span>Built by <a href="https://www.coilysiren.me/" target="_blank" rel="noopener">Kai Siren</a></span>
+    <span class="sep">·</span>
+    <a href="https://github.com/coilysiren/eco-mcp-app" target="_blank" rel="noopener">source on GitHub ↗</a>
+    <span class="sep">·</span>
+    <span>Eco is &copy; <a href="https://www.strangeloopgames.com/" target="_blank" rel="noopener">StrangeLoopGames</a> — unofficial fan tool</span>
+  </div>
+</div>

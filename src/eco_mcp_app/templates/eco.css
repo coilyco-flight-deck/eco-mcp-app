@@ -351,6 +351,59 @@
     display: block; width: 100%; height: 40px; margin: 8px 0 4px;
   }
 
+  /* ---- climate card extras ---- */
+  .climate-badge.climate-stable { background: rgba(165, 209, 74, 0.2);
+    color: var(--leaf-bright); border-color: rgba(165, 209, 74, 0.45); }
+  .climate-badge.climate-stable .dot { background: var(--leaf-bright);
+    box-shadow: 0 0 6px var(--leaf-bright); }
+  .climate-badge.climate-warming { background: rgba(244, 192, 78, 0.2);
+    color: var(--sun); border-color: rgba(244, 192, 78, 0.55); }
+  .climate-badge.climate-warming .dot { background: var(--sun);
+    box-shadow: 0 0 8px var(--sun); }
+  .climate-badge.climate-critical { background: rgba(229, 143, 44, 0.22);
+    color: var(--sunset); border-color: rgba(229, 143, 44, 0.55); }
+  .climate-badge.climate-critical .dot { background: var(--sunset);
+    box-shadow: 0 0 8px var(--sunset); }
+  .climate-badge.climate-unknown { background: rgba(120, 120, 120, 0.2);
+    color: var(--fg-muted); border-color: rgba(120, 120, 120, 0.4); }
+
+  .narrative-stable { border-left: 3px solid var(--leaf-bright); }
+  .narrative-warming { border-left: 3px solid var(--sun); }
+  .narrative-critical { border-left: 3px solid var(--sunset); }
+  .narrative-unknown { border-left: 3px solid rgba(120, 120, 120, 0.6); }
+
+  .earth-anchor { color: var(--fg-muted); font-size: 12px;
+    border-top: 1px dashed rgba(165, 209, 74, 0.25); padding-top: 6px; }
+  .earth-anchor strong { color: var(--leaf-bright); }
+
+  .climate-rank { list-style: none; padding: 0; margin: 8px 0 0;
+    display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .climate-rank li { display: flex; justify-content: space-between;
+    gap: 12px; align-items: baseline; padding: 2px 0;
+    border-bottom: 1px dotted rgba(165, 209, 74, 0.15); }
+  .climate-rank li:last-child { border-bottom: none; }
+  .climate-rank__name { color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .climate-rank__count { color: var(--leaf-bright);
+    font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  /* Pollution heatmap overlay on the map card. The image is a translucent
+     red GIF rasterized server-side from the Layers/Pollution.gif endpoint;
+     mix-blend-mode keeps deed polygons visible underneath. */
+  .eco-map__pollution {
+    position: absolute; inset: 0; pointer-events: none;
+    opacity: 0.55; mix-blend-mode: multiply;
+    filter: hue-rotate(-30deg) saturate(2);
+  }
+  .eco-map__legend-pollution {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--sunset); font-size: 11px; margin-left: 8px;
+  }
+  .eco-map__legend-pollution::before {
+    content: ""; display: inline-block; width: 10px; height: 10px;
+    background: var(--sunset); border-radius: 2px; opacity: 0.6;
+  }
+
   /* ---- get_eco_map card ---- */
   .eco-map { padding: 18px 20px; color: var(--fg); }
   .eco-map__head { display: flex; justify-content: space-between;
