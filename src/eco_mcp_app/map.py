@@ -56,12 +56,16 @@ def _world_base_url(server: str | None) -> str:
 
 
 async def fetch_map_bundle(server: str | None = None) -> dict[str, Any]:
-    """Fetch the three upstream payloads in parallel.
+    """Fetch the upstream payloads needed to render the map card.
 
     Returns a dict with:
       * `dimension`: `{x, y, z}` — raw.
       * `property`: `{deed_name: [{x, y}, ...]}` — raw.
       * `preview_gif`: `bytes` of the animated GIF.
+      * `pollution_gif`: `bytes` or `None`. Eco serves world-layer rasters at
+        ``/Layers/<Name>.gif``; the pollution layer isn't always exposed (the
+        config can disable individual rasters), so 404 is normal — we just
+        omit the overlay.
       * `base_url`: the base URL used (for display).
     """
     base = _world_base_url(server)
@@ -72,10 +76,20 @@ async def fetch_map_bundle(server: str | None = None) -> dict[str, Any]:
         prop_r.raise_for_status()
         gif_r = await client.get(f"{base}/Layers/WorldPreview.gif")
         gif_r.raise_for_status()
+        # Pollution overlay — best-effort. A 404 means the server config
+        # didn't enable the raster; the map still renders without it.
+        pollution_gif: bytes | None = None
+        try:
+            pol_r = await client.get(f"{base}/Layers/Pollution.gif")
+            if pol_r.status_code == 200 and pol_r.content:
+                pollution_gif = pol_r.content
+        except httpx.HTTPError:
+            pollution_gif = None
     return {
         "dimension": dim_r.json(),
         "property": prop_r.json(),
         "preview_gif": gif_r.content,
+        "pollution_gif": pollution_gif,
         "base_url": base,
     }
 
@@ -252,12 +266,17 @@ def build_map_payload(bundle: dict[str, Any]) -> dict[str, Any]:
     owners = sorted({p["owner"] for p in polygons})
     owner_colors = {o: _owner_color(o) for o in owners}
     owner_strokes = {o: _owner_stroke(o) for o in owners}
+    pollution_bytes = bundle.get("pollution_gif")
+    pollution_data_uri = (
+        gif_to_data_uri(cast(bytes, pollution_bytes)) if pollution_bytes else None
+    )
     return {
         "view": "eco_map",
         "sourceUrl": bundle.get("base_url"),
         "worldDim": {"x": dim.get("x"), "y": dim.get("y"), "z": dim.get("z")},
         "renderSize": MAP_RENDER_SIZE,
         "gifDataUri": gif_to_data_uri(cast(bytes, bundle.get("preview_gif") or b"")),
+        "pollutionDataUri": pollution_data_uri,
         "polygons": polygons,
         "deedCount": len({p["deed"] for p in polygons}),
         "ownerCount": len(owners),

@@ -36,6 +36,7 @@ from mcp.types import (
 )
 from pydantic import AnyUrl
 
+from . import climate as climate_mod
 from . import ecoregion as ecoregion_mod
 from . import fair_price as fair_price_mod
 from . import species as species_mod
@@ -1612,6 +1613,92 @@ def _render_economy_card(payload: dict[str, Any]) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Climate / atmosphere card (CO2 + sea level + pollution + Earth anchor)
+# ---------------------------------------------------------------------------
+
+
+CLIMATE_RESOURCE_URI = "ui://eco/climate.html"
+
+
+def _attach_climate_sparklines(payload: dict[str, Any]) -> dict[str, Any]:
+    """Render inline-SVG sparklines for the three climate series.
+
+    Done in server.py rather than climate.py to avoid pulling the Markup /
+    Jinja-aware sparkline renderer into the data module — same split as the
+    economy card, where compute_economy_payload returns raw points and the
+    render path attaches SVG.
+    """
+    for slot in ("co2", "sea_level", "pollution"):
+        section = payload.get(slot) or {}
+        pts_raw = section.get("series") or []
+        pts = [(float(t), float(v)) for t, v in pts_raw if v is not None]
+        section["spark_svg"] = Markup(_sparkline_svg(pts))
+        payload[slot] = section
+    return payload
+
+
+def _render_climate_card(payload: dict[str, Any]) -> str:
+    fetched_at = datetime.now(UTC).astimezone().strftime("%H:%M:%S")
+    return _JINJA.get_template("partials/climate_card.html").render(
+        server=payload["server"],
+        days_elapsed=payload["days_elapsed"],
+        admin_ok=payload["admin_ok"],
+        status=payload["status"],
+        narrative=payload["narrative"],
+        co2=payload["co2"],
+        sea_level=payload["sea_level"],
+        pollution=payload["pollution"],
+        earth_match=payload.get("earth_match"),
+        attribution=payload["attribution"],
+        warnings=payload.get("warnings") or [],
+        fetched_at=fetched_at,
+        steam_url=STEAM_URL,
+        banner_src=_BANNER_SRC,
+    )
+
+
+def _format_climate_markdown(payload: dict[str, Any]) -> str:
+    """Plain-text fallback for hosts without the MCP Apps iframe."""
+    server = payload["server"].get("description") or payload["server"].get("category") or "Eco"
+    co2 = payload["co2"]
+    sea = payload["sea_level"]
+    poll = payload["pollution"]
+    lines = [f"**{server} — climate: {payload['status']}**", "", payload["narrative"], ""]
+    if co2.get("current") is not None:
+        delta = (
+            f" ({co2['change_pct']:+.2f}% since cycle start)"
+            if co2.get("change_pct") is not None
+            else ""
+        )
+        lines.append(f"- CO2: **{co2['current']:.1f} ppm**{delta}")
+    if sea.get("current") is not None:
+        rate = sea.get("rate_per_day")
+        rate_str = f", {rate:+.4f}/day" if rate else ""
+        lines.append(f"- Sea level: **{sea['current']:.3f}**{rate_str}")
+    if poll.get("current") is not None:
+        lines.append(f"- Ground pollution: **{poll['current']:.1f}%** ({poll['source']})")
+    earth = payload.get("earth_match")
+    if earth:
+        lines.append(f"- Real-world anchor: {earth['note']} ({earth['ppm']:.0f} ppm).")
+    attrib = payload["attribution"]
+    if attrib.get("has_data"):
+        lines.append("")
+        lines.append("**Top polluting citizens:**")
+        for entry in attrib.get("top_citizens") or []:
+            lines.append(f"- {entry['name']}: {entry['count']:.0f}")
+        if attrib.get("top_stations"):
+            lines.append("")
+            lines.append("**Top polluting stations:**")
+            for entry in attrib.get("top_stations") or []:
+                lines.append(f"- {entry['name']}: {entry['count']:.0f}")
+    if not payload["admin_ok"]:
+        lines.extend(
+            ["", "_Admin token unavailable — series + attribution data are empty._"]
+        )
+    return "\n".join(lines)
+
+
 def _format_economy_markdown(payload: dict[str, Any]) -> str:
     k = payload["kpis"]
     server = payload["server"].get("description") or payload["server"].get("category") or "Eco"
@@ -1930,6 +2017,41 @@ def build_server() -> Server:
                 **{"_meta": UI_META},
             ),
             Tool(
+                name="get_eco_climate",
+                title="Eco — climate & pollution",
+                description=(
+                    "Surface global atmospheric state for an Eco server: live "
+                    "CO2 ppm, sea-level height + projected drift, and ground-"
+                    "pollution percentage, plus a real-world Earth CO2 anchor "
+                    "(Mauna Loa). Players who don't run polluting machines "
+                    "can use this to see the trend before sea-level rise hits "
+                    "their property. When the admin API key is configured, "
+                    "the card also lists top-polluting citizens and stations "
+                    "from the action exporter. Defaults to ECO_INFO_URL; pass "
+                    "`server` for a different one."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "server": {
+                            "type": "string",
+                            "description": (
+                                "Eco server to query. Accepts a bare host or "
+                                "IP, host:port, or a full `/info` URL. Omit "
+                                "to use the configured default."
+                            ),
+                        },
+                    },
+                    "additionalProperties": False,
+                },
+                **{
+                    "_meta": {
+                        "ui": {"resourceUri": CLIMATE_RESOURCE_URI},
+                        "ui/resourceUri": CLIMATE_RESOURCE_URI,
+                    }
+                },
+            ),
+            Tool(
                 name="get_eco_government",
                 title="Eco — government org-chart",
                 description=(
@@ -1987,11 +2109,16 @@ def build_server() -> Server:
                 name=ECONOMY_RESOURCE_URI,
                 mimeType=RESOURCE_MIME,
             ),
+            Resource(
+                uri=AnyUrl(CLIMATE_RESOURCE_URI),
+                name=CLIMATE_RESOURCE_URI,
+                mimeType=RESOURCE_MIME,
+            ),
         ]
 
     @server.read_resource()
     async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
-        if str(uri) in (RESOURCE_URI, ECONOMY_RESOURCE_URI):
+        if str(uri) in (RESOURCE_URI, ECONOMY_RESOURCE_URI, CLIMATE_RESOURCE_URI):
             return [ReadResourceContents(content=_render_shell(), mime_type=RESOURCE_MIME)]
         raise ValueError(f"Unknown resource: {uri}")
 
@@ -2112,7 +2239,11 @@ def build_server() -> Server:
                     **{"_meta": _ui_meta(_render_error(str(e)))},
                 )
             payload = build_map_payload(bundle)
-            json_payload = {k: v for k, v in payload.items() if k != "gifDataUri"}
+            json_payload = {
+                k: v
+                for k, v in payload.items()
+                if k not in ("gifDataUri", "pollutionDataUri")
+            }
             return CallToolResult(
                 content=[
                     TextContent(type="text", text=_format_map_markdown(payload)),
@@ -2196,6 +2327,48 @@ def build_server() -> Server:
                     TextContent(type="text", text=json.dumps(gov_payload)),
                 ],
                 **{"_meta": _ui_meta(_render_government_card(gov_payload))},
+            )
+
+        if name == "get_eco_climate":
+            server_arg = arguments.get("server") if arguments else None
+            try:
+                info = await fetch_eco_info(server_arg)
+            except httpx.HTTPError as e:
+                err_payload = {"view": "error", "message": f"Could not reach Eco server: {e}"}
+                return CallToolResult(
+                    content=[
+                        TextContent(type="text", text=f"**Eco server unreachable:** {e}"),
+                        TextContent(type="text", text=json.dumps(err_payload)),
+                    ],
+                    isError=True,
+                    **{"_meta": _ui_meta(_render_error(str(e)))},
+                )
+            # /info already gives DaysRunning; fall back to TimeSinceStart for
+            # bootstrap servers that haven't ticked the daily counter yet.
+            days_elapsed = int(info.get("DaysRunning") or 0)
+            if days_elapsed <= 0:
+                tss = info.get("TimeSinceStart")
+                try:
+                    days_elapsed = max(1, int(float(tss) / 3600.0))
+                except (TypeError, ValueError):
+                    days_elapsed = 1
+            admin_token = os.environ.get("ECO_ADMIN_TOKEN") or _get_admin_token()
+            default_admin_base = DEFAULT_ECO_INFO_URL.rsplit("/info", 1)[0]
+            snapshot = await climate_mod.fetch_climate(
+                server_arg,
+                info=info,
+                days_elapsed=days_elapsed,
+                admin_token=admin_token,
+                default_admin_base=default_admin_base,
+            )
+            payload = climate_mod.compute_climate_payload(snapshot)
+            payload = _attach_climate_sparklines(payload)
+            return CallToolResult(
+                content=[
+                    TextContent(type="text", text=_format_climate_markdown(payload)),
+                    TextContent(type="text", text=json.dumps(snapshot.to_dict(), default=str)),
+                ],
+                **{"_meta": _ui_meta(_render_climate_card(payload))},
             )
 
         if name == "fair_price":

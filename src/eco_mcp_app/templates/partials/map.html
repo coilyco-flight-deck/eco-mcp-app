@@ -24,6 +24,12 @@
          src="{{ gifDataUri }}"
          alt="Eco world preview"
          width="{{ renderSize }}" height="{{ renderSize }}">
+    {% if pollutionDataUri %}
+    <img class="eco-map__pollution"
+         src="{{ pollutionDataUri }}"
+         alt="Ground pollution heatmap"
+         width="{{ renderSize }}" height="{{ renderSize }}">
+    {% endif %}
     <svg class="eco-map__overlay"
          viewBox="0 0 {{ renderSize }} {{ renderSize }}"
          width="{{ renderSize }}" height="{{ renderSize }}"
@@ -49,6 +55,11 @@
       {% endfor %}
       {% if owners|length > 16 %}
         <span class="eco-map__legend-more">+{{ owners|length - 16 }} more</span>
+      {% endif %}
+      {% if pollutionDataUri %}
+        <span class="eco-map__legend-pollution" title="Translucent red overlay shows ground pollution density.">
+          ground pollution
+        </span>
       {% endif %}
     </div>
   {% else %}

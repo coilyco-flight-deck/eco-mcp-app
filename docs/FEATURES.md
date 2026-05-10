@@ -20,12 +20,14 @@ Defined in [src/eco_mcp_app/server.py](../src/eco_mcp_app/server.py). All tools 
 - **fair_price** - Real-world commodity price advisor backed by FRED (copper, wheat, lumber, iron, crude oil). Percent-change at 7d/30d/90d cadences.
 - **get_eco_ecoregion** - Biome classification against WWF ecoregions. Donut chart, top-3 matches, per-species boom/bust lists.
 - **get_eco_government** - Civic org chart. Elected titles plus occupants, active elections with countdown, active laws (markup stripped).
+- **get_eco_climate** - Atmospheric visibility for non-industrial players. Live CO2 ppm, sea-level height + projected drift rate, ground-pollution percentage, real-world Earth CO2 anchor (NOAA Mauna Loa), and a top-polluting-citizens / -stations leaderboard sourced from the action exporter. Tolerant to dataset-name drift across Eco versions: probes a candidate list and uses whichever the server exposes.
 - **list_public_eco_servers** - Curated roster of 6 known public servers with labels, host:port, notes.
 
 ## MCP resources
 
 - **ui://eco/status.html** - Main iframe shell. Initial resource and Jinja2 template for per-tool card fragments.
 - **ui://eco/economy.html** - Economy dashboard shell. Same transport pattern.
+- **ui://eco/climate.html** - Climate / atmosphere dashboard shell. Same transport pattern.
 
 ## Runtime surfaces
 
@@ -84,7 +86,7 @@ Defined in [src/eco_mcp_app/server.py](../src/eco_mcp_app/server.py). All tools 
 ## Dev tooling
 
 - **Task runner** - pyinvoke. [tasks.py](../tasks.py).
-  - `inv smoke` - Stdio end-to-end test exercising all 11 tools.
+  - `inv smoke` - Stdio end-to-end test exercising all 12 tools.
   - `inv http` - Local HTTP transport on port 4000 with hot reload.
   - `inv harness` - Browser dev harness at `localhost:8765/static/harness.html`. Mimics MCP Apps host with mocked tool-result payloads.
   - `inv test` - pytest.
@@ -103,7 +105,7 @@ Defined in [src/eco_mcp_app/server.py](../src/eco_mcp_app/server.py). All tools 
 
 ## Scope at a glance
 
-- 11 MCP tools
+- 12 MCP tools
 - 2 MCP resources
 - 6 external data sources (3 Eco endpoints, Wikidata, FRED, iNaturalist)
 - 3 bundled data assets (~20MB)

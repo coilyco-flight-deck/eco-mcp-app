@@ -28,6 +28,7 @@ async def test_list_tools_advertises_all_tools() -> None:
         "fair_price",
         "get_eco_government",
         "get_eco_ecoregion",
+        "get_eco_climate",
     }
 
 
