@@ -102,6 +102,12 @@ def _route_actions_empty() -> None:
         respx.get(url).mock(return_value=httpx.Response(200, text="Time,Citizen,Count\n"))
 
 
+def _route_flatlist(names: list[str]) -> None:
+    respx.get(f"{_DEFAULT_BASE}/datasets/flatlist").mock(
+        return_value=httpx.Response(200, json=names)
+    )
+
+
 # ---------------------------------------------------------------------------
 # fetch_climate
 # ---------------------------------------------------------------------------
@@ -112,6 +118,7 @@ def _route_actions_empty() -> None:
 async def test_fetch_climate_picks_first_nonempty_candidate() -> None:
     """Of the 4 CO2 candidates, only ``AverageCO2PPM`` returns data."""
     _route_datasets({"AverageCO2PPM": [400, 410, 420]})
+    _route_flatlist([])
     _route_worldlayers_empty()
     _route_actions_empty()
 
@@ -135,6 +142,9 @@ async def test_fetch_climate_picks_first_nonempty_candidate() -> None:
 async def test_fetch_climate_skips_admin_path_without_token() -> None:
     """No token → admin endpoints are never hit, only worldlayers is fetched."""
     ds_route = respx.get(_DATASET_URL).mock(return_value=httpx.Response(200, json=[]))
+    fl_route = respx.get(f"{_DEFAULT_BASE}/datasets/flatlist").mock(
+        return_value=httpx.Response(200, json=[])
+    )
     wl_route = respx.get(_WORLDLAYERS_URL).mock(return_value=httpx.Response(200, json=[]))
 
     snap = await fetch_climate(
@@ -147,6 +157,9 @@ async def test_fetch_climate_skips_admin_path_without_token() -> None:
 
     assert snap.admin_ok is False
     assert ds_route.call_count == 0
+    # Flatlist also requires admin perms in many setups; skipping it when no
+    # token is consistent with the rest of the admin-gated path.
+    assert fl_route.call_count == 0
     assert wl_route.called
     assert snap.co2_series == [] and snap.sea_level_series == []
 
@@ -155,6 +168,7 @@ async def test_fetch_climate_skips_admin_path_without_token() -> None:
 @respx.mock
 async def test_fetch_climate_aggregates_polluter_attribution() -> None:
     _route_datasets({"CO2PPM": [400, 405]})
+    _route_flatlist([])
     _route_worldlayers_empty()
     # `PollutionAction` returns two rows; the rest 404.
     csv_body = (
@@ -198,6 +212,7 @@ async def test_fetch_climate_aggregates_polluter_attribution() -> None:
 async def test_fetch_climate_caches_within_ttl() -> None:
     """Repeat calls within the TTL hit the cache, not the network."""
     _route_datasets({"CO2PPM": [400]})
+    _route_flatlist([])
     wl = respx.get(_WORLDLAYERS_URL).mock(return_value=httpx.Response(200, json=[]))
     _route_actions_empty()
 
@@ -217,6 +232,72 @@ async def test_fetch_climate_caches_within_ttl() -> None:
     )
     # Worldlayers hit only once — second call short-circuited by the TTLCache.
     assert wl.call_count == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_climate_falls_back_to_flatlist_discovery() -> None:
+    """When no candidate matches but flatlist exposes a CO2-keyword name,
+    the second-pass discovery probe finds it and returns its data."""
+    # None of CO2_DATASET_CANDIDATES match the live name on this server.
+    _route_datasets({"WorldCO2Level": [380, 410]})
+    _route_flatlist(
+        [
+            "WorldCO2Level",  # CO2 match
+            "TidalSeaLevelHeight",  # sea-level match
+            "AirPollutionPerRegion",  # pollution match
+            "OfferedLoanOrBond",  # noise — should be ignored
+        ]
+    )
+    _route_worldlayers_empty()
+    _route_actions_empty()
+
+    snap = await fetch_climate(
+        None,
+        info=_info(),
+        days_elapsed=4,
+        admin_token="test-token",
+        default_admin_base=_DEFAULT_BASE,
+    )
+
+    # CO2 series populated via the discovery fallback, not the candidate list.
+    assert snap.co2_dataset_name == "WorldCO2Level"
+    assert [v for _, v in snap.co2_series] == [380.0, 410.0]
+    # Catalog filtered to the climate-relevant subset (the noise name is gone).
+    assert "OfferedLoanOrBond" not in snap.available_climate_datasets
+    assert "WorldCO2Level" in snap.available_climate_datasets
+    assert "TidalSeaLevelHeight" in snap.available_climate_datasets
+    assert "AirPollutionPerRegion" in snap.available_climate_datasets
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_climate_surfaces_catalog_when_all_series_empty() -> None:
+    """Real-world failure mode: flatlist exposes climate names but every
+    series returns empty (early cycle, or no industry yet). Card should
+    name the available datasets so the empty state is debuggable."""
+    # All explicit candidates AND the discovery-matched name return empty.
+    respx.get(_DATASET_URL).mock(return_value=httpx.Response(200, json=[]))
+    _route_flatlist(["CO2 PPM", "Pollution"])
+    _route_worldlayers_empty()
+    _route_actions_empty()
+
+    snap = await fetch_climate(
+        None,
+        info=_info(),
+        days_elapsed=4,
+        admin_token="test-token",
+        default_admin_base=_DEFAULT_BASE,
+    )
+
+    assert snap.co2_series == []
+    assert snap.available_climate_datasets == ["CO2 PPM", "Pollution"]
+
+    payload = compute_climate_payload(snap)
+    # Narrative explicitly references the catalog so users know the issue
+    # is "no values yet", not "no climate stats at all".
+    assert "CO2 PPM" in payload["narrative"]
+    assert "exposes climate datasets" in payload["narrative"]
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +466,7 @@ async def test_call_get_eco_climate_returns_iframe_fragment() -> None:
             "GroundPollution": [3, 4, 5, 6],
         }
     )
+    _route_flatlist([])
     _route_worldlayers_empty()
     _route_actions_empty()
 

@@ -127,6 +127,10 @@ class ClimateSnapshot:
     top_polluter_stations: list[tuple[str, float]] = field(default_factory=list)
     pollution_actions_total: int = 0
     pollution_action_types_seen: list[str] = field(default_factory=list)
+    # Climate-related dataset names exposed by /datasets/flatlist on this
+    # server. Surfaced on the card so an empty-data path is debuggable
+    # without the user having to grep server logs.
+    available_climate_datasets: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -146,6 +150,7 @@ class ClimateSnapshot:
             "topPolluterStations": [[n, c] for n, c in self.top_polluter_stations],
             "pollutionActionsTotal": self.pollution_actions_total,
             "pollutionActionTypesSeen": list(self.pollution_action_types_seen),
+            "availableClimateDatasets": list(self.available_climate_datasets),
             "warnings": list(self.warnings),
         }
 
@@ -216,18 +221,80 @@ async def _fetch_first_nonempty(
     candidates: tuple[str, ...],
     day_end: int,
     headers: dict[str, str],
+    *,
+    flatlist: list[str] | None = None,
+    discovery_keywords: tuple[str, ...] = (),
 ) -> tuple[str | None, list[tuple[float, float]]]:
     """Try each candidate dataset name; return the first that has data.
 
     Probes are issued sequentially because we want to *stop* on the first hit
     rather than fan out. The catalog is small (3-4 names) and most servers
     will hit on the first probe, so the sequential cost is minimal.
+
+    Fallback: if no explicit candidate matches and ``flatlist`` is given,
+    scan it for any name containing one of the ``discovery_keywords`` and
+    try that. Stat names drift across Eco versions (and mods can register
+    their own), so the catalog-driven fallback is what keeps the card
+    populated when our hard-coded candidates miss.
     """
     for name in candidates:
         pts = await _fetch_dataset(client, base, name, day_end, headers)
         if pts:
             return name, pts
+    if flatlist and discovery_keywords:
+        seen = {c.lower() for c in candidates}
+        for name in flatlist:
+            lower = str(name).lower()
+            if lower in seen:
+                continue
+            if any(kw in lower for kw in discovery_keywords):
+                pts = await _fetch_dataset(client, base, name, day_end, headers)
+                if pts:
+                    return name, pts
     return None, []
+
+
+async def _fetch_dataset_flatlist(
+    client: httpx.AsyncClient, base: str, headers: dict[str, str]
+) -> list[str]:
+    """GET ``/datasets/flatlist`` — the catalog of all dataset stat names.
+
+    Eco's stat catalog can shift across versions (and mods register their
+    own names), so the explicit candidate lists in this module can miss.
+    The flatlist is the source of truth — we use it to discover climate
+    datasets when our hard-coded candidates don't match.
+
+    Returns ``[]`` on any non-200, missing endpoint, or unexpected shape.
+    """
+    try:
+        r = await client.get(f"{base}/datasets/flatlist", headers=headers)
+        if r.status_code != 200:
+            return []
+        data = r.json()
+    except (httpx.HTTPError, ValueError):
+        return []
+    if isinstance(data, list):
+        return [str(x) for x in data if x]
+    # Some Eco builds wrap the list under a key. Be defensive.
+    if isinstance(data, dict):
+        for key in ("datasets", "Datasets", "values", "Values"):
+            v = data.get(key)
+            if isinstance(v, list):
+                return [str(x) for x in v if x]
+    return []
+
+
+# Substring keywords for the flatlist-based fallback. Lowercase, matched
+# against the lowercased dataset name. Kept narrow so we don't accidentally
+# pick up unrelated stats (e.g. "co2" alone instead of "carbon" because
+# "carbonate" would also match the latter).
+CO2_DISCOVERY_KEYWORDS: tuple[str, ...] = ("co2", "ppm", "carbondioxide")
+SEA_LEVEL_DISCOVERY_KEYWORDS: tuple[str, ...] = ("sealevel", "sea level", "ocean level")
+POLLUTION_DISCOVERY_KEYWORDS: tuple[str, ...] = (
+    "groundpollution",
+    "airpollution",
+    "pollution",
+)
 
 
 async def _fetch_pollution_layer_summary(
@@ -384,9 +451,21 @@ async def fetch_climate(
         layer_task = asyncio.create_task(_fetch_pollution_layer_summary(client, base))
 
         if admin_token:
+            # Pull the dataset catalog up front so the per-series probes can
+            # fall back to keyword discovery when our hard-coded candidates
+            # miss (Eco renames stats across versions; mods register their
+            # own).
+            flatlist = await _fetch_dataset_flatlist(client, base, headers)
+
             co2_task = asyncio.create_task(
                 _fetch_first_nonempty(
-                    client, base, CO2_DATASET_CANDIDATES, snapshot.days_elapsed, headers
+                    client,
+                    base,
+                    CO2_DATASET_CANDIDATES,
+                    snapshot.days_elapsed,
+                    headers,
+                    flatlist=flatlist,
+                    discovery_keywords=CO2_DISCOVERY_KEYWORDS,
                 )
             )
             sea_task = asyncio.create_task(
@@ -396,6 +475,8 @@ async def fetch_climate(
                     SEA_LEVEL_DATASET_CANDIDATES,
                     snapshot.days_elapsed,
                     headers,
+                    flatlist=flatlist,
+                    discovery_keywords=SEA_LEVEL_DISCOVERY_KEYWORDS,
                 )
             )
             poll_task = asyncio.create_task(
@@ -405,12 +486,30 @@ async def fetch_climate(
                     POLLUTION_DATASET_CANDIDATES,
                     snapshot.days_elapsed,
                     headers,
+                    flatlist=flatlist,
+                    discovery_keywords=POLLUTION_DISCOVERY_KEYWORDS,
                 )
             )
 
             (snapshot.co2_dataset_name, snapshot.co2_series) = await co2_task
             (snapshot.sea_level_dataset_name, snapshot.sea_level_series) = await sea_task
             (snapshot.pollution_dataset_name, snapshot.pollution_series) = await poll_task
+
+            # Surface every climate-related dataset name the catalog
+            # exposes so the empty-state card can hint at why we found
+            # nothing, and so future debugging doesn't need server logs.
+            climate_kws = (
+                CO2_DISCOVERY_KEYWORDS
+                + SEA_LEVEL_DISCOVERY_KEYWORDS
+                + POLLUTION_DISCOVERY_KEYWORDS
+            )
+            snapshot.available_climate_datasets = sorted(
+                {
+                    name
+                    for name in flatlist
+                    if any(kw in name.lower() for kw in climate_kws)
+                }
+            )
 
             # Polluter attribution. Sequential per-action because the exporter
             # CSVs can be many MB late-cycle; we stream-parse each one in turn
@@ -578,6 +677,7 @@ def compute_climate_payload(snapshot: ClimateSnapshot) -> dict[str, Any]:
         sea_change_pct=sea_change_pct,
         admin_ok=snapshot.admin_ok,
         any_series=bool(snapshot.co2_series or snapshot.sea_level_series),
+        available_climate_datasets=snapshot.available_climate_datasets,
     )
 
     return {
@@ -626,6 +726,7 @@ def compute_climate_payload(snapshot: ClimateSnapshot) -> dict[str, Any]:
             ],
         },
         "warnings": list(snapshot.warnings),
+        "available_climate_datasets": list(snapshot.available_climate_datasets),
         "fetched_at_iso": snapshot.fetched_at_iso,
         "source_base_url": snapshot.source_base_url,
     }
@@ -639,6 +740,7 @@ def _narrative(
     sea_change_pct: float | None,
     admin_ok: bool,
     any_series: bool,
+    available_climate_datasets: list[str] | None = None,
 ) -> str:
     """One-sentence summary for the card header."""
     if not admin_ok and not any_series:
@@ -647,7 +749,21 @@ def _narrative(
             "CO2 and sea-level series require ECO_ADMIN_TOKEN."
         )
     if not any_series:
-        return "No atmospheric series exposed by this server yet."
+        # When the catalog *did* expose climate datasets but none had values,
+        # call that out specifically — it's a different failure mode from
+        # "this server's stat catalog has no climate stats at all" and the
+        # latter usually means a mod is missing.
+        if available_climate_datasets:
+            sample = ", ".join(f"`{n}`" for n in available_climate_datasets[:5])
+            return (
+                f"Server exposes climate datasets ({sample}) but none have "
+                "recorded values yet — early in the cycle, or the polluting "
+                "machinery hasn't run."
+            )
+        return (
+            "No atmospheric series exposed by this server's stat catalog. "
+            "Likely a missing climate / pollution mod, or a vanilla ruleset."
+        )
 
     bits: list[str] = []
     if co2_ppm:
@@ -704,10 +820,13 @@ def _clear_cache() -> None:
 
 __all__ = [
     "CO2_DATASET_CANDIDATES",
+    "CO2_DISCOVERY_KEYWORDS",
     "EARTH_CO2_HISTORY",
     "POLLUTION_ACTION_TYPES",
     "POLLUTION_DATASET_CANDIDATES",
+    "POLLUTION_DISCOVERY_KEYWORDS",
     "SEA_LEVEL_DATASET_CANDIDATES",
+    "SEA_LEVEL_DISCOVERY_KEYWORDS",
     "ClimateSnapshot",
     "compute_climate_payload",
     "fetch_climate",

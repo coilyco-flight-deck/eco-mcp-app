@@ -41,6 +41,14 @@
     and polluter attribution.
   </div>
   {%- endif %}
+  {%- if available_climate_datasets %}
+  <div class="hint" style="margin-top:6px">
+    Catalog exposes:
+    {%- for name in available_climate_datasets %}
+      <code>{{ name }}</code>{{ "," if not loop.last else "" }}
+    {%- endfor %}
+  </div>
+  {%- endif %}
 </div>
 
 <div class="grid">
