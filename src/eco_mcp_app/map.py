@@ -267,9 +267,7 @@ def build_map_payload(bundle: dict[str, Any]) -> dict[str, Any]:
     owner_colors = {o: _owner_color(o) for o in owners}
     owner_strokes = {o: _owner_stroke(o) for o in owners}
     pollution_bytes = bundle.get("pollution_gif")
-    pollution_data_uri = (
-        gif_to_data_uri(cast(bytes, pollution_bytes)) if pollution_bytes else None
-    )
+    pollution_data_uri = gif_to_data_uri(cast(bytes, pollution_bytes)) if pollution_bytes else None
     return {
         "view": "eco_map",
         "sourceUrl": bundle.get("base_url"),
