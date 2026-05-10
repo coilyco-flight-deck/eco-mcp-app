@@ -1652,6 +1652,7 @@ def _render_climate_card(payload: dict[str, Any]) -> str:
         earth_match=payload.get("earth_match"),
         attribution=payload["attribution"],
         warnings=payload.get("warnings") or [],
+        available_climate_datasets=payload.get("available_climate_datasets") or [],
         fetched_at=fetched_at,
         steam_url=STEAM_URL,
         banner_src=_BANNER_SRC,
