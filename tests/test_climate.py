@@ -92,6 +92,33 @@ def _route_datasets(values: dict[str, list[float]]) -> None:
     respx.get(_DATASET_URL).mock(side_effect=handler)
 
 
+def _parallel_series(values: list[float], unit: str = "PPM") -> dict[str, object]:
+    """Eco 0.13.0.3 parallel-array dataset payload (Times+Values+Interval+Unit).
+
+    Matches the live shape verified against ``eco.coilysiren.me:3001``.
+    """
+    return {
+        "Times": [float(i * 86400) for i, _ in enumerate(values)],
+        "Values": [float(v) for v in values],
+        "Interval": 86400.0,
+        "Unit": unit,
+    }
+
+
+def _route_datasets_parallel(values: dict[str, list[float]]) -> None:
+    """Same as ``_route_datasets`` but returns parallel-arrays shape."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        name = request.url.params.get("dataset", "")
+        if name in values:
+            return httpx.Response(200, json=_parallel_series(values[name]))
+        return httpx.Response(
+            200, json={"Times": [], "Values": [], "Interval": 86400.0, "Unit": "PPM"}
+        )
+
+    respx.get(_DATASET_URL).mock(side_effect=handler)
+
+
 def _route_worldlayers_empty() -> None:
     respx.get(_WORLDLAYERS_URL).mock(return_value=httpx.Response(200, json=[]))
 
@@ -135,6 +162,43 @@ def _route_flatlist_dicts(names: list[str]) -> None:
 # ---------------------------------------------------------------------------
 # fetch_climate
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_climate_parses_parallel_arrays_shape() -> None:
+    """Eco 0.13.0.3 returns ``{Times,Values,Interval,Unit}`` for ContinuousValue.
+
+    Regression for the empty-card bug: ``_fetch_dataset`` previously only
+    accepted ``list`` payloads and dropped the dict-shape series silently.
+    Verified live against ``http://eco.coilysiren.me:3001/datasets/get``
+    on 2026-05-10.
+    """
+    _route_datasets_parallel(
+        {
+            "TotalCO2": [325.0, 325.0, 410.04, 520.0],
+            "SeaLevel": [60.0, 60.0, 60.13, 61.0],
+            "TotalGroundPollution": [0.0, 16.8, 629.4, 705.9],
+        }
+    )
+    _route_flatlist([])
+    _route_worldlayers_empty()
+    _route_actions_empty()
+
+    snap = await fetch_climate(
+        None,
+        info=_info(),
+        days_elapsed=4,
+        admin_token="test-token",
+        default_admin_base=_DEFAULT_BASE,
+    )
+
+    assert snap.co2_dataset_name == "TotalCO2"
+    assert [v for _, v in snap.co2_series] == [325.0, 325.0, 410.04, 520.0]
+    assert snap.sea_level_dataset_name == "SeaLevel"
+    assert [v for _, v in snap.sea_level_series] == [60.0, 60.0, 60.13, 61.0]
+    assert snap.pollution_dataset_name == "TotalGroundPollution"
+    assert [v for _, v in snap.pollution_series] == [0.0, 16.8, 629.4, 705.9]
 
 
 @pytest.mark.asyncio
@@ -208,9 +272,7 @@ async def test_fetch_climate_aggregates_polluter_attribution() -> None:
     for action in POLLUTION_ACTION_TYPES:
         if action == "PollutionAction":
             continue
-        respx.get(f"{base_actions}?actionName={action}").mock(
-            return_value=httpx.Response(404)
-        )
+        respx.get(f"{base_actions}?actionName={action}").mock(return_value=httpx.Response(404))
 
     snap = await fetch_climate(
         None,
@@ -330,9 +392,7 @@ async def test_fetch_climate_parses_dict_shape_flatlist() -> None:
     assert "TotalCO2" in snap.available_climate_datasets
     assert "SeaLevel" in snap.available_climate_datasets
     assert "TotalGroundPollution" in snap.available_climate_datasets
-    assert not any(
-        "{" in n or "'Name'" in n for n in snap.available_climate_datasets
-    )
+    assert not any("{" in n or "'Name'" in n for n in snap.available_climate_datasets)
 
 
 @pytest.mark.asyncio

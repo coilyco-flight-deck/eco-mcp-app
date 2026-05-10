@@ -110,7 +110,7 @@ _CRITICAL_PPM = 500.0
 # TTL is plenty and prevents the iframe-on-refresh case from hammering the
 # admin endpoint.
 _CACHE_TTL_S = float(os.environ.get("ECO_CLIMATE_CACHE_TTL", "60"))
-_climate_cache: TTLCache[str, "ClimateSnapshot"] = TTLCache(maxsize=64, ttl=_CACHE_TTL_S)
+_climate_cache: TTLCache[str, ClimateSnapshot] = TTLCache(maxsize=64, ttl=_CACHE_TTL_S)
 
 # Action exporter row cap — same defensive bound as crafting.py uses.
 _MAX_ROWS_PER_ACTION = int(os.environ.get("ECO_CLIMATE_MAX_ROWS", "200000"))
@@ -215,7 +215,29 @@ async def _fetch_dataset(
             parsed = _parse_dataset_point(pt)
             if parsed is not None:
                 out.append(parsed)
+    elif isinstance(data, dict):
+        out.extend(_parse_parallel_arrays(data))
     return out
+
+
+def _parse_parallel_arrays(data: dict[str, Any]) -> list[tuple[float, float]]:
+    """Zip an Eco 0.13 parallel-array dataset payload to ``[(t, v), ...]``.
+
+    Live ContinuousValue stats on Eco 0.13.0.3 return:
+        {"Times": [...], "Values": [...], "Interval": N, "Unit": "PPM"}
+    instead of a list of point dicts. Both keys are case-tolerant.
+    """
+    times = data.get("Times") or data.get("times")
+    values = data.get("Values") or data.get("values")
+    if not isinstance(times, list) or not isinstance(values, list):
+        return []
+    pairs: list[tuple[float, float]] = []
+    for t_raw, v_raw in zip(times, values, strict=False):
+        try:
+            pairs.append((float(t_raw), float(v_raw)))
+        except (TypeError, ValueError):
+            continue
+    return pairs
 
 
 # Time-key candidates ordered by how common each form is in the wild:
@@ -376,9 +398,7 @@ POLLUTION_DISCOVERY_KEYWORDS: tuple[str, ...] = (
 )
 
 
-async def _fetch_pollution_layer_summary(
-    client: httpx.AsyncClient, base: str
-) -> str | None:
+async def _fetch_pollution_layer_summary(client: httpx.AsyncClient, base: str) -> str | None:
     """Pull the ``Pollution`` layer's ``Summary`` (e.g. ``"4%"``) from worldlayers.
 
     The worldlayers endpoint is public — no admin token needed — which is
@@ -578,16 +598,10 @@ async def fetch_climate(
             # exposes so the empty-state card can hint at why we found
             # nothing, and so future debugging doesn't need server logs.
             climate_kws = (
-                CO2_DISCOVERY_KEYWORDS
-                + SEA_LEVEL_DISCOVERY_KEYWORDS
-                + POLLUTION_DISCOVERY_KEYWORDS
+                CO2_DISCOVERY_KEYWORDS + SEA_LEVEL_DISCOVERY_KEYWORDS + POLLUTION_DISCOVERY_KEYWORDS
             )
             snapshot.available_climate_datasets = sorted(
-                {
-                    name
-                    for name in flatlist
-                    if any(kw in name.lower() for kw in climate_kws)
-                }
+                {name for name in flatlist if any(kw in name.lower() for kw in climate_kws)}
             )
 
             # Polluter attribution. Sequential per-action because the exporter
@@ -717,9 +731,7 @@ def compute_climate_payload(snapshot: ClimateSnapshot) -> dict[str, Any]:
 
     sea_last = _series_last(snapshot.sea_level_series)
     sea_first = _series_first(snapshot.sea_level_series)
-    sea_change_pct = (
-        _percent_change(sea_first, sea_last) if snapshot.sea_level_series else None
-    )
+    sea_change_pct = _percent_change(sea_first, sea_last) if snapshot.sea_level_series else None
     # Linear extrapolation: at the current rate, when does sea level cross +1
     # unit? The mod reads sea level in arbitrary units, so we project the
     # number of cycle-days, not meters — interpretation is the player's job.
@@ -745,9 +757,7 @@ def compute_climate_payload(snapshot: ClimateSnapshot) -> dict[str, Any]:
     earth_match = _earth_year_for_ppm(co2_last) if snapshot.co2_series else None
     status = _classify_status(co2_last, sea_change_pct) if snapshot.co2_series else "unknown"
 
-    has_attribution = bool(
-        snapshot.top_polluter_citizens or snapshot.top_polluter_stations
-    )
+    has_attribution = bool(snapshot.top_polluter_citizens or snapshot.top_polluter_stations)
 
     narrative = _narrative(
         status=status,
@@ -784,9 +794,7 @@ def compute_climate_payload(snapshot: ClimateSnapshot) -> dict[str, Any]:
             "series": [list(p) for p in snapshot.sea_level_series],
         },
         "pollution": {
-            "current": (
-                round(pollution_value, 2) if pollution_value is not None else None
-            ),
+            "current": (round(pollution_value, 2) if pollution_value is not None else None),
             "source": pollution_source,
             "dataset_name": snapshot.pollution_dataset_name,
             "layer_summary": snapshot.pollution_layer_summary,

@@ -1694,9 +1694,7 @@ def _format_climate_markdown(payload: dict[str, Any]) -> str:
             for entry in attrib.get("top_stations") or []:
                 lines.append(f"- {entry['name']}: {entry['count']:.0f}")
     if not payload["admin_ok"]:
-        lines.extend(
-            ["", "_Admin token unavailable — series + attribution data are empty._"]
-        )
+        lines.extend(["", "_Admin token unavailable — series + attribution data are empty._"])
     return "\n".join(lines)
 
 
@@ -2241,9 +2239,7 @@ def build_server() -> Server:
                 )
             payload = build_map_payload(bundle)
             json_payload = {
-                k: v
-                for k, v in payload.items()
-                if k not in ("gifDataUri", "pollutionDataUri")
+                k: v for k, v in payload.items() if k not in ("gifDataUri", "pollutionDataUri")
             }
             return CallToolResult(
                 content=[
