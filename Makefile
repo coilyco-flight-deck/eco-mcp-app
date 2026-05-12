@@ -14,12 +14,8 @@ image-url ?= ghcr.io/$(name)/$(name-dashed):$(git-hash)
 echo:
 	echo $(image-url)
 
-help:
-	@awk '/^## / \
-		{ if (c) {print c}; c=substr($$0, 4); next } \
-			c && /(^[[:alpha:]][[:alnum:]_-]+:)/ \
-		{printf "%-30s %s\n", $$1, c; c=0} \
-			END { print c }' $(MAKEFILE_LIST)
+help: ## Print this help.
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "%-30s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # rebuild requirements.txt whenever pyproject.toml changes
 .build: pyproject.toml
@@ -27,9 +23,7 @@ help:
 	uv export --no-hashes --no-dev --no-emit-project --format requirements-txt -o requirements.txt
 	touch .build
 
-## build project on your plain old machine
-#  see also: build-docker
-build-native: .build
+build-native: .build ## uv lock + uv sync. Rebuilds requirements.txt from pyproject.toml.
 	uv sync
 
 .build-docker:
@@ -41,28 +35,22 @@ build-native: .build
 		-t $(name):latest \
 		.
 
-## build project inside of a docker container
-#  see also: build-native
-build-docker: .build .build-docker
+build-docker: .build .build-docker ## Build the docker image locally with BuildKit cache.
 
 .publish:
 	docker tag $(name):$(git-hash) $(image-url)
 	docker push $(image-url)
 
-## publish the docker image to the registry
-publish: build-docker .publish
+publish: build-docker .publish ## Tag and push the docker image to ghcr.io.
 
-## deploy the namespace for the application
 deploy-namespace:
 	kubectl create namespace $(name-dashed)
 
-## deploy the cert secrets utilized by the application
 deploy-secrets-cert:
 	env \
 		NAME=$(name-dashed) \
 		envsubst < deploy/secrets-cert.yml | kubectl apply -f -
 
-## deploy the docker registry secret utilized by the application
 deploy-secrets-docker-repo:
 	$(eval github-token := $(shell aws ssm get-parameter --name "/github/pat" --with-decryption --query "Parameter.Value" --output text))
 	echo $(github-token) | docker login ghcr.io -u $(name) --password-stdin
@@ -81,25 +69,18 @@ deploy-secrets-docker-repo:
 		envsubst < deploy/main.yml | kubectl apply -f -
 	kubectl rollout status deployment/$(name-dashed)-app -n $(name-dashed) --timeout=5m
 
-## deploy the application to the cluster
-deploy: publish .deploy
+deploy: publish .deploy ## Build, publish, and roll out the application to the k3s cluster.
 
-## run project on your plain old machine (HTTP transport on $(port))
-#  see also: run-docker
-run-native:
+run-native: ## Run the FastAPI server with autoreload on the configured port.
 	uv run uvicorn eco_mcp_app.http_app:app --reload --port $(port) --host 0.0.0.0
 
-## run project inside of a docker container
-#  see also: run-native
-run-docker:
+run-docker: ## Run the published container locally on the configured port.
 	docker run --expose $(port) -p $(port):$(port) -it --rm $(name):latest
 
-## install deps via uv
-sync:
+sync: ## Install deps via uv.
 	uv sync
 
-## end-to-end smoke test the MCP server via stdio
-smoke:
+smoke: ## End-to-end smoke test the MCP server via stdio.
 	(printf '%s\n' \
 	  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"extensions":{"io.modelcontextprotocol/ui":{"mimeTypes":["text/html;profile=mcp-app"]}}},"clientInfo":{"name":"claude-ai","version":"0.1.0"}}}' \
 	  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
@@ -109,35 +90,26 @@ smoke:
 	  '{"jsonrpc":"2.0","id":5,"method":"resources/read","params":{"uri":"ui://eco/economy.html"}}' \
 	  '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_eco_economy","arguments":{}}}'; sleep 8) | uv run python -m eco_mcp_app
 
-## wire eco-mcp-app into Claude Desktop's claude_desktop_config.json
-install-desktop:
+install-desktop: ## Wire eco-mcp-app into Claude Desktop's claude_desktop_config.json.
 	python scripts/install-desktop-config.py
 
-## serve static/harness.html, the local Claude-Desktop-mimicking iframe host
-#  vars: harness_port (default 8765)
-harness:
+harness: ## Serve static/harness.html, the local Claude-Desktop-mimicking iframe host. Args - harness_port=<int>.
 	@echo "Harness: http://localhost:$(or $(harness_port),8765)/static/harness.html"
 	python3 -m http.server $(or $(harness_port),8765)
 
-## run pytest
-test:
+test: ## Run the pytest suite.
 	uv run pytest
 
-## lint + format check (no mutations)
-ruff:
+ruff: ## Lint + format check (no mutations).
 	uv run ruff check src
 	uv run ruff format --check src
 
-## apply ruff fixes and formatting in place
-fmt:
+fmt: ## Apply ruff fixes and formatting in place.
 	uv run ruff check --fix src
 	uv run ruff format src
 
-## run all pre-commit hooks against every file
-precommit:
+precommit: ## Run all pre-commit hooks against every file.
 	uv run pre-commit run --all-files
 
-## run the MCP server over HTTP on $(port)
-#  vars: http_port (default $(port))
-http:
+http: ## Run the MCP server over HTTP. Args - http_port=<int>.
 	uv run uvicorn eco_mcp_app.http_app:app --reload --host 0.0.0.0 --port $(or $(http_port),$(port))
