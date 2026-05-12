@@ -85,14 +85,12 @@ Defined in [src/eco_mcp_app/server.py](../src/eco_mcp_app/server.py). All tools 
 
 ## Dev tooling
 
-- **Task runner** - pyinvoke. [tasks.py](../tasks.py).
-  - `inv smoke` - Stdio end-to-end test exercising all 12 tools.
-  - `inv http` - Local HTTP transport on port 4000 with hot reload.
-  - `inv harness` - Browser dev harness at `localhost:8765/static/harness.html`. Mimics MCP Apps host with mocked tool-result payloads.
-  - `inv test` - pytest.
-  - `inv ruff` / `inv fmt` - Lint and format.
-  - `inv precommit` - Pre-commit hooks.
-  - `inv install-desktop` - Auto-register in Claude Desktop config.
+- **Task runner** - coily verbs declared in [.coily/coily.yaml](../.coily/coily.yaml), each delegating to a Make target in [Makefile](../Makefile).
+  - `coily smoke` - Stdio end-to-end test exercising all 12 tools.
+  - `coily http` - Local HTTP transport on port 4000 with hot reload.
+  - `coily harness` - Browser dev harness at `localhost:8765/static/harness.html`. Mimics MCP Apps host with mocked tool-result payloads.
+  - `coily install-desktop` - Auto-register in Claude Desktop config.
+  - `coily sync` - Install deps via uv.
 - **Makefile** - `make build-native`, `make build-docker`, `make publish`, `make deploy`.
 - **Pre-commit** - ruff (lint + format), mypy (type check).
 - **Test stack** - pytest, pytest-asyncio, respx for HTTP mocking. [tests/](../tests/).

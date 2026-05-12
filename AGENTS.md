@@ -39,7 +39,7 @@ This project depends on the user's Eco (Strange Loop Games) repo ecosystem, whic
 | `eco-mods` | private | Third-party mods installed on the user's private Eco server + configs. C#. |
 | `eco-mods-public` | public | User's own C# mods (BunWulf family + others). |
 | `eco-configs` | private | Server config diffs. |
-| `infrastructure` | public | k3s + pyinvoke + external-secrets + Traefik. Low-level homelab cluster config; reference for how the cluster itself is wired. |
+| `infrastructure` | public | k3s + coily + external-secrets + Traefik. Low-level homelab cluster config; reference for how the cluster itself is wired. |
 
 ## Key references
 
