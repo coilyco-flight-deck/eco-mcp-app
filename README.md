@@ -455,3 +455,7 @@ MIT.
 [15]: https://github.com/anthropics/claude-ai-mcp/issues/71
 [16]: https://github.com/anthropics/claude-ai-mcp/issues/61#issuecomment-4283640203
 [17]: https://github.com/anthropics/claude-ai-mcp/issues/40
+
+## Commands
+
+Dev commands are declared in [`.coily/coily.yaml`](.coily/coily.yaml). Run them as `coily exec <verb>`.
