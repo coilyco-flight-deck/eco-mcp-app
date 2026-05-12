@@ -61,3 +61,7 @@ Per the workspace "Default to proactive scheduling" rule: after pushing to `main
 - **Verify CI**: `coily gh run list --repo coilysiren/eco-mcp-app --limit 1` should show `completed/success`. Re-schedule once at +300s if in progress; surface and stop on failure.
 - **Verify rollout**: `coily kubectl --context=kai-server -n coilysiren-eco-mcp-app rollout status deployment/coilysiren-eco-mcp-app-app --timeout=2m`.
 - **Skip** for docs-only pushes.
+
+## Commands
+
+Route every dev command through coily, which reads [`.coily/coily.yaml`](.coily/coily.yaml). The lockdown denies bare invocations of the underlying tools (`make`, `uv`, `npm`, `dotnet`, `docker`, `cargo`, etc.). Add new verbs to that file before invoking them.
