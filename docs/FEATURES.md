@@ -113,3 +113,11 @@ Defined in [src/eco_mcp_app/server.py](../src/eco_mcp_app/server.py). All tools 
 - 10+ source modules
 - 1 k3s deployment with TLS, secrets, CI/CD
 - 22 partial templates rendering per-card UI
+
+## See also
+
+- [README.md](../README.md) - human-facing intro.
+- [AGENTS.md](../AGENTS.md) - agent-facing operating rules.
+- [.coily/coily.yaml](../.coily/coily.yaml) - allowlisted commands.
+
+Cross-reference convention from [coilysiren/coilyco-ai#313](https://github.com/coilysiren/coilyco-ai/issues/313).
