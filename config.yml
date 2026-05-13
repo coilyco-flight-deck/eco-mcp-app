@@ -5,3 +5,5 @@ name: coilysiren/eco-mcp-app
 eco-info-url: http://eco.coilysiren.me:3001/info
 # Default port the FastAPI / Streamable-HTTP app binds to locally and in-container.
 port: 4000
+tailnet:
+  shortcut: eco-mcp
