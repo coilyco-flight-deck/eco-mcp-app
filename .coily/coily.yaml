@@ -53,3 +53,18 @@ commands:
   deploy:
     run: make deploy
     description: Build, publish, and roll out the application to the k3s cluster.
+
+# Catalog metadata for the cross-repo knowledge graph.
+# Schema: coilysiren/coilyco-ai#420 (tracker).
+catalog:
+  kind: Component
+  type: service
+  system: eco
+  owner: kai
+  lifecycle: production
+  description: "Inline Claude Desktop widget for any public Eco game server. Live player counts, meteor countdown, world stats. MCP Apps reference implementation in Python."
+  dependsOn:
+    - coilysiren/backend
+    - coilysiren/infrastructure
+  providesApis:
+    - eco-mcp-server
