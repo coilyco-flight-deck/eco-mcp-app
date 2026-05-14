@@ -17,13 +17,8 @@ echo:
 help: ## Print this help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "%-30s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# rebuild requirements.txt whenever pyproject.toml changes
-.build: pyproject.toml
+build-native: ## uv lock + uv sync.
 	uv lock
-	uv export --no-hashes --no-dev --no-emit-project --format requirements-txt -o requirements.txt
-	touch .build
-
-build-native: .build ## uv lock + uv sync. Rebuilds requirements.txt from pyproject.toml.
 	uv sync
 
 .build-docker:
@@ -35,7 +30,7 @@ build-native: .build ## uv lock + uv sync. Rebuilds requirements.txt from pyproj
 		-t $(name):latest \
 		.
 
-build-docker: .build .build-docker ## Build the docker image locally with BuildKit cache.
+build-docker: .build-docker ## Build the docker image locally with BuildKit cache.
 
 .publish:
 	docker tag $(name):$(git-hash) $(image-url)
