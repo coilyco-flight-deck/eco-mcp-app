@@ -55,7 +55,7 @@ commands:
     description: Build, publish, and roll out the application to the k3s cluster.
 
 # Catalog metadata for the cross-repo knowledge graph.
-# Schema: coilysiren/coilyco-ai#420 (tracker).
+# Schema: coilysiren/agentic-os-kai#420 (tracker).
 catalog:
   kind: Component
   type: service
