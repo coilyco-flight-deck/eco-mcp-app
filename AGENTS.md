@@ -1,75 +1,65 @@
 # Agent instructions
 
-See `../AGENTS.md` for workspace-level conventions (git workflow, test/lint autonomy, readonly ops, writing voice, deploy knowledge). This file covers only what's specific to this repo.
+See `../AGENTS.md` for workspace conventions. This file covers what's specific.
 
 ---
 
 ## Project layout
 
-- `src/eco_mcp_app/server.py` - transport-agnostic MCP server. One tool: `get_eco_server_status` with optional `server` arg (host, host:port, or full URL - bare IPs are common for public Eco servers).
-- `src/eco_mcp_app/__main__.py` - stdio entry point for Claude Desktop.
-- `src/eco_mcp_app/http_app.py` - Starlette ASGI app wrapping the same MCP server via `StreamableHTTPSessionManager` (stateless). Routes: `/`, `/healthz`, `/mcp/`. Used by the homelab deploy.
-- `src/eco_mcp_app/ui/eco.html` - the iframe rendered by MCP Apps hosts; hand-rolled handshake, no bundler. Eco's Steam banner is inlined as a data URI (external image origins are blocked by Claude Desktop's CSP per `claude-ai-mcp#40`).
-- `scripts/install-desktop-config.py` - registers this server in Claude Desktop's config.
-- `static/harness.html` - browser-based MCP Apps host simulator for iterating on the iframe without restarting Claude Desktop. Also wired into `.claude/launch.json` as the `eco-harness` preview.
-- `Makefile` - `make smoke`, `make http`, `make harness`, `make ruff`, `make fmt`, `make precommit`, `make install-desktop`, `make test`, plus the deploy targets. Coily wraps each as `coily <verb>`.
-- `Dockerfile` / `config.yml` / `deploy/main.yml` / `.github/workflows/build-and-publish.yml` - homelab deploy rig, cloned from `coilysiren/backend`.
-- `investigation/` - chronological post-mortem of the debugging session that produced this repo. Read these before questioning a decision that looks weird.
+- `src/eco_mcp_app/server.py` - transport-agnostic MCP server. One tool: `get_eco_server_status` (host, host:port, or full URL).
+- `src/eco_mcp_app/__main__.py` - stdio entry for Claude Desktop.
+- `src/eco_mcp_app/http_app.py` - Starlette ASGI wrapping the MCP server via `StreamableHTTPSessionManager` (stateless). Routes: `/`, `/healthz`, `/mcp/`.
+- `src/eco_mcp_app/ui/eco.html` - iframe for MCP Apps hosts; hand-rolled handshake, no bundler. Eco Steam banner inlined as data URI (Claude Desktop CSP blocks external origins, `claude-ai-mcp#40`).
+- `scripts/install-desktop-config.py` - registers server in Claude Desktop's config.
+- `static/harness.html` - browser MCP Apps host simulator. Wired into `.claude/launch.json` as `eco-harness` preview.
+- `Makefile` - `smoke`, `http`, `harness`, `ruff`, `fmt`, `precommit`, `install-desktop`, `test`, deploy targets. Coily wraps each.
+- `Dockerfile` / `config.yml` / `deploy/main.yml` / `.github/workflows/build-and-publish.yml` - deploy rig, cloned from `coilysiren/backend`.
+- `investigation/` - chronological post-mortem of the debugging session that produced this repo. Read before questioning weird-looking decisions.
 
 ## Dev loop
 
-- `uv sync --group dev` - install runtime + dev deps.
-- `pre-commit install` (once) - ruff + mypy run on every `git commit`.
-- `coily smoke` (or `make smoke`) - stdio smoke test: initialize -> list tools -> read resource -> call tool.
-- `coily http` - run the HTTP transport locally on the configured port. Endpoint: `POST /mcp/`.
-- `coily harness` - serve the dev harness at `http://localhost:8765/static/harness.html` for iframe work.
-- `coily ruff` / `coily fmt` - lint/format check vs apply.
-- `coily build-docker` / `coily deploy` - build/push the image and roll out to k3s (needs kubectl + AWS SSM access for bootstrap).
+- `uv sync --group dev` - runtime + dev deps.
+- `pre-commit install` (once) - ruff + mypy on every commit.
+- `coily smoke` - stdio test: initialize → list tools → read resource → call tool.
+- `coily http` - HTTP transport locally. Endpoint: `POST /mcp/`.
+- `coily harness` - dev harness at `http://localhost:8765/static/harness.html`.
+- `coily ruff` / `coily fmt` - lint/format.
+- `coily build-docker` / `coily deploy` - build/push + k3s rollout.
 
-After each commit to `main`, run the test suite (or confirm it was just run). If tests pass, `git push` immediately. If tests fail, fix them before pushing.
+After each commit to `main`, run tests. Pass = `git push` immediately. Fail = fix first.
 
 ## Sibling Eco repos
 
-This project depends on the user's Eco (Strange Loop Games) repo ecosystem, which live as siblings under `/Users/kai/projects/coilysiren` on Mac. Read from them directly rather than asking the user for Eco domain details.
+Read directly rather than asking.
 
-| Dir | Visibility | Purpose |
-|---|---|---|
-| `backend` | public | The canonical deploy template for k3s + GHCR + Tailscale + cert-manager. `Dockerfile` / `Makefile` / `deploy/main.yml` / `.github/workflows/build-and-publish.yml` in this repo were cloned from there. |
-| `eco-cycle-prep` | public | Per-cycle setup (worldgen, Discord announcements, mod sync). Make + coily-driven, same pattern as this repo. |
-| `eco-mods` | private | Third-party mods installed on the user's private Eco server + configs. C#. |
-| `eco-mods-public` | public | User's own C# mods (BunWulf family + others). |
-| `eco-configs` | private | Server config diffs. |
-| `infrastructure` | public | k3s + coily + external-secrets + Traefik. Low-level homelab cluster config; reference for how the cluster itself is wired. |
+- `backend` (public) - canonical deploy template (k3s + GHCR + Tailscale + cert-manager). Source of this repo's Dockerfile/Makefile/deploy.
+- `eco-cycle-prep` (public) - per-cycle setup (worldgen, Discord, mod sync). Same coily pattern.
+- `eco-mods` (private) - third-party mods + configs. C#.
+- `eco-mods-public` (public) - own C# mods (BunWulf family + others).
+- `eco-configs` (private) - server config diffs.
+- `infrastructure` (public) - k3s + coily + external-secrets + Traefik.
 
 ## Key references
 
 - MCP Apps spec (2026-01-26): https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx
-- Eco `/info` endpoint: live at `http://eco.coilysiren.me:3001/info`.
-- Relevant upstream issues: `claude-ai-mcp#71` (dual `_meta.ui.resourceUri` forms), `claude-ai-mcp#61` (handshake causes), `claude-ai-mcp#40` (CSP), `claude-ai-mcp#69` (size-changed vs documentElement).
+- Eco `/info`: live at `http://eco.coilysiren.me:3001/info`.
+- Upstream issues: `claude-ai-mcp#71` (dual `_meta.ui.resourceUri`), `#61` (handshake), `#40` (CSP), `#69` (size-changed vs documentElement).
 
 ## Adversarial testing
 
-When asked to harden this service, run it through gauntlet against `https://eco-mcp.coilysiren.me/` following the template in the sibling `gauntlet` repo at `~/projects/coilysiren/gauntlet/docs/hardening-prompt-template.md` (Mac) or `X:/projects-x/coilysiren/gauntlet/docs/hardening-prompt-template.md` (Windows). The worked example at the bottom of that template is the filled-in version for this repo; replay it as-is. Authorized: Kai owns both repos.
+To harden this service, run gauntlet against `https://eco-mcp.coilysiren.me/` using `~/projects/coilysiren/gauntlet/docs/hardening-prompt-template.md`. Worked example at the bottom is the filled-in version - replay as-is.
 
----
+## Post-push follow-up
 
-## Post-push follow-up (auto-schedule)
-
-Per the workspace "Default to proactive scheduling" rule: after pushing to `main`, schedule a wake-up to verify the build-publish-deploy job landed on kai-server. CI builds the docker image, pushes to ghcr.io, and rolls out a k8s deployment; total time is ~6-12 min.
-
-- **Cadence**: 720s (12 min) after push.
-- **Verify CI**: `coily gh run list --repo coilysiren/eco-mcp-app --limit 1` should show `completed/success`. Re-schedule once at +300s if in progress; surface and stop on failure.
+- **Cadence**: 720s.
+- **Verify CI**: `coily gh run list --repo coilysiren/eco-mcp-app --limit 1`. Re-schedule once at +300s if in progress.
 - **Verify rollout**: `coily kubectl --context=kai-server -n coilysiren-eco-mcp-app rollout status deployment/coilysiren-eco-mcp-app-app --timeout=2m`.
 - **Skip** for docs-only pushes.
-
-## Commands
-
-Route every dev command through coily, which reads [`.coily/coily.yaml`](.coily/coily.yaml). The lockdown denies bare invocations of the underlying tools (`make`, `uv`, `npm`, `dotnet`, `docker`, `cargo`, etc.). Add new verbs to that file before invoking them.
 
 ## See also
 
 - [README.md](README.md) - human-facing intro.
 - [docs/FEATURES.md](docs/FEATURES.md) - inventory of what ships today.
-- [.coily/coily.yaml](.coily/coily.yaml) - allowlisted commands. Agents route through coily, not bare `make` / `uv` / `python` / `npm` / `cargo` / `dotnet`.
+- [.coily/coily.yaml](.coily/coily.yaml) - allowlisted commands.
 
-Cross-reference convention from [coilysiren/agentic-os-kai#313](https://github.com/coilysiren/agentic-os-kai/issues/313).
+Cross-reference convention from [coilysiren/agentic-os#59](https://github.com/coilysiren/agentic-os/issues/59).
