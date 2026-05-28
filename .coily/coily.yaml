@@ -64,7 +64,5 @@ catalog:
   lifecycle: production
   description: "Inline Claude Desktop widget for any public Eco game server. Live player counts, meteor countdown, world stats. MCP Apps reference implementation in Python."
   dependsOn:
-    - coilysiren/backend
-    - coilysiren/infrastructure
-  providesApis:
-    - eco-mcp-server
+    - forgejo.coilysiren.me/coilysiren/backend
+    - forgejo.coilysiren.me/coilysiren/infrastructure

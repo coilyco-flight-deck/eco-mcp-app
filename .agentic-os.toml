@@ -1,0 +1,14 @@
+# Per-repo opt-outs for agentic-os pre-commit hooks (agentic_os/config.py).
+# These hooks use always_run + whole-tree walks, so pre-commit's framework
+# `exclude:` is bypassed; this file is the supported escape valve.
+
+# The investigation/ tree is a preserved chronological post-mortem (see
+# AGENTS.md) and docs/FEATURES.md is a known long-form doc; both predate the
+# 80-line / 4000-char Markdown caps and are exempt rather than split.
+[documentation-layout]
+excludes = ["investigation/", "docs/FEATURES.md"]
+
+# AGENTS.md uses repo-specific section names rather than the standard H2 set.
+# Conforming it is out of scope for the catalog migration; disable for now.
+[catalog-trifecta]
+enabled = false
