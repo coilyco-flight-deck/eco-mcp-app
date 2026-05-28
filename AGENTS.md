@@ -51,6 +51,8 @@ To harden this service, run gauntlet against `https://eco-mcp.coilysiren.me/` us
 
 ## Post-push follow-up
 
+CI only builds + publishes the SHA-pinned image to GHCR. Rollout happens via pull-side update on kai-server, not GHA.
+
 - **Cadence**: 720s.
 - **Verify CI**: `coily gh run list --repo coilysiren/eco-mcp-app --limit 1`. Re-schedule once at +300s if in progress.
 - **Verify rollout**: `coily kubectl --context=kai-server -n coilysiren-eco-mcp-app rollout status deployment/coilysiren-eco-mcp-app-app --timeout=2m`.
