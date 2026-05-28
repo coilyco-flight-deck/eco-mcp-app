@@ -168,7 +168,7 @@ def test_build_map_payload_handles_no_deeds() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_map_bundle_hits_three_endpoints() -> None:
+async def test_fetch_map_bundle_hits_four_endpoints() -> None:
     dim_route = respx.get(f"{ECO_BASE_URL_DEFAULT}/api/v1/map/dimension").mock(
         return_value=httpx.Response(200, json=_fake_dimension())
     )
@@ -178,13 +178,38 @@ async def test_fetch_map_bundle_hits_three_endpoints() -> None:
     gif_route = respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/WorldPreview.gif").mock(
         return_value=httpx.Response(200, content=_TINY_GIF)
     )
+    pollution_route = respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/Pollution.gif").mock(
+        return_value=httpx.Response(200, content=_TINY_GIF)
+    )
     bundle = await eco_map.fetch_map_bundle()
     assert dim_route.called
     assert prop_route.called
     assert gif_route.called
+    assert pollution_route.called
     assert bundle["dimension"]["x"] == 720
     assert bundle["preview_gif"] == _TINY_GIF
+    assert bundle["pollution_gif"] == _TINY_GIF
     assert bundle["base_url"] == ECO_BASE_URL_DEFAULT
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_fetch_map_bundle_omits_pollution_on_404() -> None:
+    respx.get(f"{ECO_BASE_URL_DEFAULT}/api/v1/map/dimension").mock(
+        return_value=httpx.Response(200, json=_fake_dimension())
+    )
+    respx.get(f"{ECO_BASE_URL_DEFAULT}/api/v1/map/property").mock(
+        return_value=httpx.Response(200, json=_fake_property())
+    )
+    respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/WorldPreview.gif").mock(
+        return_value=httpx.Response(200, content=_TINY_GIF)
+    )
+    # Pollution raster disabled in server config — 404 is normal, overlay omitted.
+    respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/Pollution.gif").mock(
+        return_value=httpx.Response(404)
+    )
+    bundle = await eco_map.fetch_map_bundle()
+    assert bundle["pollution_gif"] is None
 
 
 @pytest.mark.asyncio
@@ -198,6 +223,7 @@ async def test_fetch_map_bundle_respects_server_arg() -> None:
     gif_route = respx.get(f"{base}/Layers/WorldPreview.gif").mock(
         return_value=httpx.Response(200, content=_TINY_GIF)
     )
+    respx.get(f"{base}/Layers/Pollution.gif").mock(return_value=httpx.Response(404))
     bundle = await eco_map.fetch_map_bundle("eco.example.com:5679")
     assert gif_route.called
     assert bundle["base_url"] == base
@@ -233,6 +259,9 @@ async def test_get_eco_map_call_tool_returns_rendered_fragment() -> None:
         return_value=httpx.Response(200, json=_fake_property())
     )
     respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/WorldPreview.gif").mock(
+        return_value=httpx.Response(200, content=_TINY_GIF)
+    )
+    respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/Pollution.gif").mock(
         return_value=httpx.Response(200, content=_TINY_GIF)
     )
     mcp = build_server()
