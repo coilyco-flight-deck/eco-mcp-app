@@ -64,4 +64,4 @@ CI only builds + publishes the SHA-pinned image to GHCR. Rollout happens via pul
 - [docs/FEATURES.md](docs/FEATURES.md) - inventory of what ships today.
 - [.coily/coily.yaml](.coily/coily.yaml) - allowlisted commands.
 
-Cross-reference convention from [coilysiren/agentic-os#59](https://github.com/coilysiren/agentic-os/issues/59).
+Cross-reference convention from [coilysiren/agentic-os#59](https://github.com/coilyco-flight-deck/agentic-os/issues/59).

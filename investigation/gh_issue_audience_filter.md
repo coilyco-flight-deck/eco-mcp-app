@@ -11,7 +11,7 @@ The model still receives the markdown + JSON content blocks correctly, so the ch
 
 ## Cause
 
-Commit [`7542e67`](https://github.com/coilysiren/eco-mcp-app/commit/7542e67) ("feat: hide widget HTML from the LLM via audience=['user']") added `Annotations(audience=["user"])` to the HTMX-prefixed `TextContent` block via the new `_htmx_content()` helper in `src/eco_mcp_app/server.py`. The commit message asserted:
+Commit [`7542e67`](https://github.com/coilyco-flight-deck/eco-mcp-app/commit/7542e67) ("feat: hide widget HTML from the LLM via audience=['user']") added `Annotations(audience=["user"])` to the HTMX-prefixed `TextContent` block via the new `_htmx_content()` helper in `src/eco_mcp_app/server.py`. The commit message asserted:
 
 > Claude Desktop's handshake (templates/eco.html) reads the block by prefix, not annotation, so the widget keeps rendering.
 
