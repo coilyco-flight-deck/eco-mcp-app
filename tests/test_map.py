@@ -205,9 +205,7 @@ async def test_fetch_map_bundle_omits_pollution_on_404() -> None:
         return_value=httpx.Response(200, content=_TINY_GIF)
     )
     # Pollution raster disabled in server config — 404 is normal, overlay omitted.
-    respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/Pollution.gif").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{ECO_BASE_URL_DEFAULT}/Layers/Pollution.gif").mock(return_value=httpx.Response(404))
     bundle = await eco_map.fetch_map_bundle()
     assert bundle["pollution_gif"] is None
 
