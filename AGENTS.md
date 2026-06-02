@@ -13,7 +13,7 @@ See `../AGENTS.md` for workspace conventions. This file covers what's specific.
 - `scripts/install-desktop-config.py` - registers server in Claude Desktop's config.
 - `static/harness.html` - browser MCP Apps host simulator. Wired into `.claude/launch.json` as `eco-harness` preview.
 - `Makefile` - `smoke`, `http`, `harness`, `ruff`, `fmt`, `precommit`, `install-desktop`, `test`, deploy targets. Coily wraps each.
-- `Dockerfile` / `config.yml` / `deploy/main.yml` / `.github/workflows/build-and-publish.yml` - deploy rig, cloned from `coilysiren/backend`.
+- `Dockerfile` / `coily.yaml` / `deploy/main.yml` / `.github/workflows/build-and-publish.yml` - deploy rig, cloned from `coilysiren/backend`.
 - `investigation/` - chronological post-mortem of the debugging session that produced this repo. Read before questioning weird-looking decisions.
 
 ## Dev loop
