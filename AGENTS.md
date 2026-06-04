@@ -1,6 +1,6 @@
 # Agent instructions
 
-See `../AGENTS.md` for workspace conventions. This file covers what's specific.
+Workspace conventions load globally via `~/.claude/CLAUDE.md` -> `agentic-os-kai/AGENTS.md`. This file covers only what is specific to this repo.
 
 ---
 
