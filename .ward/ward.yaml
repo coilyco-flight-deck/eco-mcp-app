@@ -1,0 +1,78 @@
+# Per-repo command allowlist for eco-mcp-app. Coily is the canonical entry
+# point for dev verbs here; each command below delegates to a Make target.
+# Operators (human or agent) type `coily <verb>`, not `make <target>` -
+# the lockdown denies bare uv/python invocations.
+#
+# Names follow coily's [a-z0-9-] rule. Argv validation rejects shell
+# metacharacters at invocation time, so flags forward verbatim through
+# coily's user-extras mechanism.
+
+commands:
+  sync:
+    run: make sync
+    description: Install deps via uv.
+  smoke:
+    run: make smoke
+    description: End-to-end smoke test the MCP server via stdio.
+  install-desktop:
+    run: make install-desktop
+    description: Wire eco-mcp-app into Claude Desktop's claude_desktop_config.json.
+  harness:
+    run: make harness
+    description: Serve static/harness.html, the local Claude-Desktop-mimicking iframe host. Args - harness_port=<int>.
+  http:
+    run: make http
+    description: Run the MCP server over HTTP. Args - http_port=<int>.
+  test:
+    run: make test
+    description: Run the pytest suite.
+  ruff:
+    run: make ruff
+    description: Lint + format check (no mutations).
+  fmt:
+    run: make fmt
+    description: Apply ruff fixes and formatting in place.
+  precommit:
+    run: make precommit
+    description: Run all pre-commit hooks against every file.
+  build-native:
+    run: make build-native
+    description: uv lock + uv sync.
+  build-docker:
+    run: make build-docker
+    description: Build the docker image locally with BuildKit cache.
+  publish:
+    run: make publish
+    description: Tag and push the docker image to ghcr.io.
+  run-native:
+    run: make run-native
+    description: Run the FastAPI server with autoreload on the configured port.
+  run-docker:
+    run: make run-docker
+    description: Run the published container locally on the configured port.
+  deploy:
+    run: make deploy
+    description: Build, publish, and roll out the application to the k3s cluster.
+
+# Catalog metadata for the cross-repo knowledge graph.
+# Schema: coilysiren/agentic-os-kai#420 (tracker).
+catalog:
+  kind: Component
+  type: service
+  system: eco
+  owner: kai
+  lifecycle: production
+  description: "Inline Claude Desktop widget for any public Eco game server. Live player counts, meteor countdown, world stats. MCP Apps reference implementation in Python."
+  dependsOn:
+    - forgejo.coilysiren.me/coilysiren/backend
+    - forgejo.coilysiren.me/coilysiren/infrastructure
+
+# Capability skills pulled into this repo for OpenClaw's thin context slice.
+# OpenClaw runs confined to one repo; agentic-os-kai/setup.sh resolves each
+# provider/skill-dir name against capability_providers in that repo's
+# categories.yaml and symlinks the skill into ./.agents/skills/ (git-excluded).
+# This service is a Python MCP server (Starlette ASGI), so it wants the python
+# and web-server-shape context, nothing fleet-wide.
+capabilities:
+  - agentic-os/coding-python
+  - agentic-os/coding-shape-web-server
