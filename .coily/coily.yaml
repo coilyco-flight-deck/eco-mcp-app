@@ -66,3 +66,13 @@ catalog:
   dependsOn:
     - forgejo.coilysiren.me/coilysiren/backend
     - forgejo.coilysiren.me/coilysiren/infrastructure
+
+# Capability skills pulled into this repo for OpenClaw's thin context slice.
+# OpenClaw runs confined to one repo; agentic-os-kai/setup.sh resolves each
+# provider/skill-dir name against capability_providers in that repo's
+# categories.yaml and symlinks the skill into ./.agents/skills/ (git-excluded).
+# This service is a Python MCP server (Starlette ASGI), so it wants the python
+# and web-server-shape context, nothing fleet-wide.
+capabilities:
+  - agentic-os/coding-python
+  - agentic-os/coding-shape-web-server
