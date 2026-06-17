@@ -20,11 +20,11 @@ Workspace conventions load globally via `~/.claude/CLAUDE.md` -> `agentic-os-kai
 
 - `uv sync --group dev` - runtime + dev deps.
 - `pre-commit install` (once) - ruff + mypy on every commit.
-- `coily smoke` - stdio test: initialize → list tools → read resource → call tool.
-- `coily http` - HTTP transport locally. Endpoint: `POST /mcp/`.
-- `coily harness` - dev harness at `http://localhost:8765/static/harness.html`.
-- `coily ruff` / `coily fmt` - lint/format.
-- `coily build-docker` / `coily deploy` - build/push + k3s rollout.
+- `ward exec smoke` - stdio test: initialize → list tools → read resource → call tool.
+- `ward exec http` - HTTP transport locally. Endpoint: `POST /mcp/`.
+- `ward exec harness` - dev harness at `http://localhost:8765/static/harness.html`.
+- `ward exec ruff` / `ward exec fmt` - lint/format.
+- `ward exec build-docker` / `ward exec deploy` - build/push + k3s rollout.
 
 After each commit to `main`, run tests. Pass = `git push` immediately. Fail = fix first.
 
@@ -62,6 +62,6 @@ CI only builds + publishes the SHA-pinned image to GHCR. Rollout happens via pul
 
 - [README.md](README.md) - human-facing intro.
 - [docs/FEATURES.md](docs/FEATURES.md) - inventory of what ships today.
-- [.coily/coily.yaml](.coily/coily.yaml) - allowlisted commands.
+- [.ward/ward.yaml](.ward/ward.yaml) - allowlisted commands (`ward exec`). ([.coily/coily.yaml](.coily/coily.yaml) retained during the .coily -> .ward migration window.)
 
 Cross-reference convention from [coilysiren/agentic-os#59](https://github.com/coilyco-flight-deck/agentic-os/issues/59).
